@@ -1,0 +1,26 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# ===== SECRETOS: NUNCA se suben =====
+# La plantilla firmware/secrets_example.py SÍ se sube; el archivo real no.
+secrets.py
+*.env
+credenciales*.json
+
+# ===== Datos generados al ejecutar =====
+estado.json
+estado.json.tmp
+historial.csv
+*.log
+backend/datos/*
+!backend/datos/.gitkeep
+
+# ===== Editor y sistema operativo =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
