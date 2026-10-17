@@ -1,6 +1,7 @@
-from machine import Pin, ADC, time_pulse_us
+from machine import Pin, time_pulse_us
 import time
 import config
+import sensor_ldr
 # >>> INICIO CSV (descomentar SOLO en un ESP32 real; Wokwi no lo necesita)
 # import os
 # <<< FIN CSV
@@ -9,8 +10,7 @@ import config
 pir = Pin(config.PIN_PIR, Pin.IN)            # Sala: salida del PIR
 trig = Pin(config.PIN_TRIG, Pin.OUT)         # Habitación 1: TRIG del HC-SR04
 echo = Pin(config.PIN_ECHO, Pin.IN)          # Habitación 1: ECHO del HC-SR04
-ldr = ADC(Pin(config.PIN_LDR))               # Habitación 2: salida analógica (AO) del LDR
-ldr.atten(ADC.ATTN_11DB)                     # rango completo de lectura (0 - 3.3 V)
+# Habitación 2: el LDR ahora se configura dentro de sensor_ldr.py
 
 ds = Pin(config.PIN_DS, Pin.OUT)             # 74HC595: DS   (datos)
 stcp = Pin(config.PIN_STCP, Pin.OUT)         # 74HC595: STCP (latch)
@@ -102,12 +102,7 @@ def medir_distancia_cm():
         return None
     return duracion * 0.0343 / 2
 
-def leer_ldr():
-    """Promedio de varias lecturas para un valor estable (0-4095)."""
-    suma = 0
-    for _ in range(8):
-        suma += ldr.read()
-    return suma // 8
+# (la lectura del LDR vive ahora en sensor_ldr.py -> sensor_ldr.leer())
 
 # ==================== ESTADO DE CADA ZONA ====================
 sala = {"nombre": "SALA", "bit": config.BIT_SALA,
@@ -182,7 +177,7 @@ print("=================================")
 print(" CASA INTELIGENTE - ESP32")
 print("=================================")
 print("Sistema iniciado correctamente")
-print("Lectura inicial del LDR: {} (UMBRAL_LUZ = {})\n".format(leer_ldr(), config.UMBRAL_LUZ))
+print("Lectura inicial del LDR: {} (UMBRAL_LUZ = {})\n".format(sensor_ldr.leer(), config.UMBRAL_LUZ))
 
 ultimo_debug = time.ticks_ms()
 
@@ -208,7 +203,7 @@ while True:
     controlar_zona_presencia(hab1, hay_alguien, detalle)
 
     # Habitación 2: LDR
-    valor_ldr = leer_ldr()
+    valor_ldr = sensor_ldr.leer()
     controlar_zona_ldr(hab2, valor_ldr)
 
     # Ayuda de calibración (opcional)
