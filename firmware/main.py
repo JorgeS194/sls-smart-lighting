@@ -1,15 +1,15 @@
-from machine import Pin, time_pulse_us
+from machine import Pin
 import time
 import config
 import sensor_ldr
+import sensor_ultrasonico
 # >>> INICIO CSV (descomentar SOLO en un ESP32 real; Wokwi no lo necesita)
 # import os
 # <<< FIN CSV
 
 # ==================== PINES (los números vienen de config.py) ====================
 pir = Pin(config.PIN_PIR, Pin.IN)            # Sala: salida del PIR
-trig = Pin(config.PIN_TRIG, Pin.OUT)         # Habitación 1: TRIG del HC-SR04
-echo = Pin(config.PIN_ECHO, Pin.IN)          # Habitación 1: ECHO del HC-SR04
+# Habitación 1: el HC-SR04 ahora se configura dentro de sensor_ultrasonico.py
 # Habitación 2: el LDR ahora se configura dentro de sensor_ldr.py
 
 ds = Pin(config.PIN_DS, Pin.OUT)             # 74HC595: DS   (datos)
@@ -90,18 +90,7 @@ def apagar_todos():
     actualizar_595()
 
 # ==================== LECTURA DE SENSORES ====================
-def medir_distancia_cm():
-    """Devuelve la distancia del HC-SR04 en cm, o None si no hay eco."""
-    trig.value(0)
-    time.sleep_us(2)
-    trig.value(1)
-    time.sleep_us(10)
-    trig.value(0)
-    duracion = time_pulse_us(echo, 1, 30000)  # microsegundos (30 ms de límite)
-    if duracion < 0:
-        return None
-    return duracion * 0.0343 / 2
-
+# (la medición del HC-SR04 vive ahora en sensor_ultrasonico.py -> medir_cm())
 # (la lectura del LDR vive ahora en sensor_ldr.py -> sensor_ldr.leer())
 
 # ==================== ESTADO DE CADA ZONA ====================
@@ -183,7 +172,7 @@ ultimo_debug = time.ticks_ms()
 
 # Calentamiento del HC-SR04: se descarta la primera medición y se espera
 # a que termine cualquier eco pendiente (el sensor necesita ~60 ms entre mediciones).
-medir_distancia_cm()
+sensor_ultrasonico.medir_cm()
 time.sleep_ms(60)
 
 while True:
@@ -197,7 +186,7 @@ while True:
     controlar_zona_presencia(sala, hubo_irq or pir.value() == 1)
 
     # Habitación 1: HC-SR04
-    distancia = medir_distancia_cm()
+    distancia = sensor_ultrasonico.medir_cm()
     hay_alguien = distancia is not None and distancia < config.DISTANCIA_PRESENCIA
     detalle = " (a {} cm)".format(int(distancia)) if hay_alguien else ""
     controlar_zona_presencia(hab1, hay_alguien, detalle)
