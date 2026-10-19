@@ -1,35 +1,20 @@
-from machine import Pin, ADC, time_pulse_us
+from machine import Pin
 import time
+import config
+import sensor_ldr
+import sensor_ultrasonico
 # >>> INICIO CSV (descomentar SOLO en un ESP32 real; Wokwi no lo necesita)
 # import os
 # <<< FIN CSV
 
-# ==================== CONFIGURACIÓN (puedes modificarla) ====================
-TIEMPO_APAGADO = 5          # segundos que la luz sigue encendida tras perder la presencia (Sala y Habitación 1)
-DISTANCIA_PRESENCIA = 100   # cm: si el HC-SR04 mide menos que esto, hay presencia
-UMBRAL_LUZ = 2000           # valor del ADC (0-4095) que separa "oscuro" de "claro"
-HISTERESIS_LUZ = 150        # margen para evitar parpadeos cerca del umbral
-OSCURO_ES_VALOR_ALTO = True # True: oscuridad = valor ADC alto | False: oscuridad = valor ADC bajo
-DEPURAR_LDR = False         # True: imprime el valor del LDR cada segundo (para calibrar el umbral)
-PAUSA_CICLO_MS = 100        # pausa entre cada revisión de los sensores
-ARCHIVO_CSV = "historial.csv"   # archivo donde se guarda el historial (solo ESP32 real)
-MAX_HISTORIAL = 50              # eventos que se conservan en memoria RAM
+# ==================== PINES (los números vienen de config.py) ====================
+pir = Pin(config.PIN_PIR, Pin.IN)            # Sala: salida del PIR
+# Habitación 1: el HC-SR04 ahora se configura dentro de sensor_ultrasonico.py
+# Habitación 2: el LDR ahora se configura dentro de sensor_ldr.py
 
-# ==================== PINES (según tu circuito) ====================
-pir = Pin(13, Pin.IN)            # Sala: salida del PIR
-trig = Pin(14, Pin.OUT)          # Habitación 1: TRIG del HC-SR04
-echo = Pin(12, Pin.IN)           # Habitación 1: ECHO del HC-SR04
-ldr = ADC(Pin(34))               # Habitación 2: salida analógica (AO) del LDR
-ldr.atten(ADC.ATTN_11DB)         # rango completo de lectura (0 - 3.3 V)
-
-ds = Pin(21, Pin.OUT)            # 74HC595: DS   (datos)
-stcp = Pin(22, Pin.OUT)          # 74HC595: STCP (latch)
-shcp = Pin(23, Pin.OUT)          # 74HC595: SHCP (reloj)
-
-# Salidas del 74HC595 asignadas a cada LED
-BIT_SALA = 7   # Q7 -> LED rojo
-BIT_HAB1 = 6   # Q6 -> LED verde
-BIT_HAB2 = 5   # Q5 -> LED azul
+ds = Pin(config.PIN_DS, Pin.OUT)             # 74HC595: DS   (datos)
+stcp = Pin(config.PIN_STCP, Pin.OUT)         # 74HC595: STCP (latch)
+shcp = Pin(config.PIN_SHCP, Pin.OUT)         # 74HC595: SHCP (reloj)
 
 # ==================== INTERRUPCIÓN DE HARDWARE (PIR) ====================
 # El PIR avisa por interrupción (flanco de subida en GPIO13). La rutina de
@@ -52,12 +37,12 @@ def registrar_evento(zona, evento, valor=""):
     """Guarda el evento en el historial. La escritura al CSV está comentada."""
     ahora = time.ticks_ms()
     historial.append((ahora, zona, evento, valor))
-    if len(historial) > MAX_HISTORIAL:
+    if len(historial) > config.MAX_HISTORIAL:
         historial.pop(0)
     # >>> INICIO CSV (descomentar SOLO en un ESP32 real)
     # try:
-    #     nuevo = ARCHIVO_CSV not in os.listdir()
-    #     with open(ARCHIVO_CSV, "a") as f:
+    #     nuevo = config.ARCHIVO_CSV not in os.listdir()
+    #     with open(config.ARCHIVO_CSV, "a") as f:
     #         if nuevo:
     #             f.write("tiempo_ms,zona,evento,valor\n")
     #         f.write("{},{},{},{}\n".format(ahora, zona, evento, valor))
@@ -69,10 +54,10 @@ def exportar_csv():
     """Imprime el CSV por el puerto serie para copiarlo (llamar desde la REPL)."""
     # >>> INICIO CSV (descomentar SOLO en un ESP32 real)
     # try:
-    #     with open(ARCHIVO_CSV) as f:
+    #     with open(config.ARCHIVO_CSV) as f:
     #         print(f.read())
     # except OSError:
-    #     print("[CSV] Aun no existe", ARCHIVO_CSV)
+    #     print("[CSV] Aun no existe", config.ARCHIVO_CSV)
     # <<< FIN CSV
     pass
 
@@ -105,31 +90,15 @@ def apagar_todos():
     actualizar_595()
 
 # ==================== LECTURA DE SENSORES ====================
-def medir_distancia_cm():
-    """Devuelve la distancia del HC-SR04 en cm, o None si no hay eco."""
-    trig.value(0)
-    time.sleep_us(2)
-    trig.value(1)
-    time.sleep_us(10)
-    trig.value(0)
-    duracion = time_pulse_us(echo, 1, 30000)  # microsegundos (30 ms de límite)
-    if duracion < 0:
-        return None
-    return duracion * 0.0343 / 2
-
-def leer_ldr():
-    """Promedio de varias lecturas para un valor estable (0-4095)."""
-    suma = 0
-    for _ in range(8):
-        suma += ldr.read()
-    return suma // 8
+# (la medición del HC-SR04 vive ahora en sensor_ultrasonico.py -> medir_cm())
+# (la lectura del LDR vive ahora en sensor_ldr.py -> sensor_ldr.leer())
 
 # ==================== ESTADO DE CADA ZONA ====================
-sala = {"nombre": "SALA", "bit": BIT_SALA,
+sala = {"nombre": "SALA", "bit": config.BIT_SALA,
         "presencia": False, "luz": False, "ultima": 0}
-hab1 = {"nombre": "HABITACION 1", "bit": BIT_HAB1,
+hab1 = {"nombre": "HABITACION 1", "bit": config.BIT_HAB1,
         "presencia": False, "luz": False, "ultima": 0}
-hab2 = {"nombre": "HABITACION 2", "bit": BIT_HAB2,
+hab2 = {"nombre": "HABITACION 2", "bit": config.BIT_HAB2,
         "oscuro": False, "luz": False}
 
 # ==================== LÓGICA DE LAS ZONAS ====================
@@ -154,7 +123,7 @@ def controlar_zona_presencia(z, hay_presencia, detalle=""):
             print("[{}] Luz ENCENDIDA".format(z["nombre"]))
             registrar_evento(z["nombre"], "LUZ_ENCENDIDA")
     elif z["luz"]:
-        if time.ticks_diff(ahora, z["ultima"]) >= TIEMPO_APAGADO * 1000:
+        if time.ticks_diff(ahora, z["ultima"]) >= config.TIEMPO_APAGADO * 1000:
             poner_led(z["bit"], False)
             z["luz"] = False
             print("[{}] Luz APAGADA".format(z["nombre"]))
@@ -163,16 +132,16 @@ def controlar_zona_presencia(z, hay_presencia, detalle=""):
 def controlar_zona_ldr(z, valor):
     """Habitación 2: enciende con poca luz y apaga con luz suficiente."""
     # Con histéresis: el umbral cambia según el estado actual
-    if OSCURO_ES_VALOR_ALTO:
+    if config.OSCURO_ES_VALOR_ALTO:
         if z["oscuro"]:
-            oscuro = valor > UMBRAL_LUZ - HISTERESIS_LUZ
+            oscuro = valor > config.UMBRAL_LUZ - config.HISTERESIS_LUZ
         else:
-            oscuro = valor > UMBRAL_LUZ + HISTERESIS_LUZ
+            oscuro = valor > config.UMBRAL_LUZ + config.HISTERESIS_LUZ
     else:
         if z["oscuro"]:
-            oscuro = valor < UMBRAL_LUZ + HISTERESIS_LUZ
+            oscuro = valor < config.UMBRAL_LUZ + config.HISTERESIS_LUZ
         else:
-            oscuro = valor < UMBRAL_LUZ - HISTERESIS_LUZ
+            oscuro = valor < config.UMBRAL_LUZ - config.HISTERESIS_LUZ
 
     if oscuro and not z["oscuro"]:
         print("[{}] Oscuridad detectada (LDR = {})".format(z["nombre"], valor))
@@ -197,9 +166,14 @@ print("=================================")
 print(" CASA INTELIGENTE - ESP32")
 print("=================================")
 print("Sistema iniciado correctamente")
-print("Lectura inicial del LDR: {} (UMBRAL_LUZ = {})\n".format(leer_ldr(), UMBRAL_LUZ))
+print("Lectura inicial del LDR: {} (UMBRAL_LUZ = {})\n".format(sensor_ldr.leer(), config.UMBRAL_LUZ))
 
 ultimo_debug = time.ticks_ms()
+
+# Calentamiento del HC-SR04: se descarta la primera medición y se espera
+# a que termine cualquier eco pendiente (el sensor necesita ~60 ms entre mediciones).
+sensor_ultrasonico.medir_cm()
+time.sleep_ms(60)
 
 while True:
     # Sala: PIR (por interrupción de hardware + lectura del nivel)
@@ -212,18 +186,18 @@ while True:
     controlar_zona_presencia(sala, hubo_irq or pir.value() == 1)
 
     # Habitación 1: HC-SR04
-    distancia = medir_distancia_cm()
-    hay_alguien = distancia is not None and distancia < DISTANCIA_PRESENCIA
+    distancia = sensor_ultrasonico.medir_cm()
+    hay_alguien = distancia is not None and distancia < config.DISTANCIA_PRESENCIA
     detalle = " (a {} cm)".format(int(distancia)) if hay_alguien else ""
     controlar_zona_presencia(hab1, hay_alguien, detalle)
 
     # Habitación 2: LDR
-    valor_ldr = leer_ldr()
+    valor_ldr = sensor_ldr.leer()
     controlar_zona_ldr(hab2, valor_ldr)
 
     # Ayuda de calibración (opcional)
-    if DEPURAR_LDR and time.ticks_diff(time.ticks_ms(), ultimo_debug) >= 1000:
+    if config.DEPURAR_LDR and time.ticks_diff(time.ticks_ms(), ultimo_debug) >= 1000:
         print("[DEBUG] LDR = {}".format(valor_ldr))
         ultimo_debug = time.ticks_ms()
 
-    time.sleep_ms(PAUSA_CICLO_MS)
+    time.sleep_ms(config.PAUSA_CICLO_MS)
