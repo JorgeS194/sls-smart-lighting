@@ -1,6 +1,7 @@
 from machine import Pin
 import time
 import config
+import sensor_pir
 import sensor_ldr
 import sensor_ultrasonico
 # >>> INICIO CSV (descomentar SOLO en un ESP32 real; Wokwi no lo necesita)
@@ -8,7 +9,7 @@ import sensor_ultrasonico
 # <<< FIN CSV
 
 # ==================== PINES (los números vienen de config.py) ====================
-pir = Pin(config.PIN_PIR, Pin.IN)            # Sala: salida del PIR
+# Sala: el PIR y su interrupción ahora se configuran dentro de sensor_pir.py
 # Habitación 1: el HC-SR04 ahora se configura dentro de sensor_ultrasonico.py
 # Habitación 2: el LDR ahora se configura dentro de sensor_ldr.py
 
@@ -17,18 +18,7 @@ stcp = Pin(config.PIN_STCP, Pin.OUT)         # 74HC595: STCP (latch)
 shcp = Pin(config.PIN_SHCP, Pin.OUT)         # 74HC595: SHCP (reloj)
 
 # ==================== INTERRUPCIÓN DE HARDWARE (PIR) ====================
-# El PIR avisa por interrupción (flanco de subida en GPIO13). La rutina de
-# interrupción (ISR) solo levanta una bandera: es corta y no imprime ni usa
-# memoria dinámica. El programa principal atiende la bandera en el ciclo.
-pir_evento = False      # bandera levantada por la ISR
-contador_irq = 0        # cantidad de interrupciones atendidas
-
-def isr_pir(pin):
-    """ISR: se ejecuta sola en cada flanco de subida del PIR."""
-    global pir_evento
-    pir_evento = True
-
-pir.irq(trigger=Pin.IRQ_RISING, handler=isr_pir)
+# (la ISR y su bandera viven ahora en sensor_pir.py -> hubo_interrupcion())
 
 # ==================== HISTORIAL Y CSV ====================
 historial = []   # lista en RAM: (tiempo_ms, zona, evento, valor)
@@ -90,6 +80,7 @@ def apagar_todos():
     actualizar_595()
 
 # ==================== LECTURA DE SENSORES ====================
+# (el PIR vive ahora en sensor_pir.py -> hubo_interrupcion(), hay_movimiento())
 # (la medición del HC-SR04 vive ahora en sensor_ultrasonico.py -> medir_cm())
 # (la lectura del LDR vive ahora en sensor_ldr.py -> sensor_ldr.leer())
 
@@ -177,13 +168,11 @@ time.sleep_ms(60)
 
 while True:
     # Sala: PIR (por interrupción de hardware + lectura del nivel)
-    hubo_irq = pir_evento
+    hubo_irq = sensor_pir.hubo_interrupcion()   # True una sola vez por interrupción
     if hubo_irq:
-        pir_evento = False          # se atiende la bandera de la ISR
-        contador_irq += 1
-        print("[SALA] Interrupcion de hardware del PIR (IRQ #{})".format(contador_irq))
-        registrar_evento("SALA", "IRQ_PIR", contador_irq)
-    controlar_zona_presencia(sala, hubo_irq or pir.value() == 1)
+        print("[SALA] Interrupcion de hardware del PIR (IRQ #{})".format(sensor_pir.contador()))
+        registrar_evento("SALA", "IRQ_PIR", sensor_pir.contador())
+    controlar_zona_presencia(sala, hubo_irq or sensor_pir.hay_movimiento())
 
     # Habitación 1: HC-SR04
     distancia = sensor_ultrasonico.medir_cm()
