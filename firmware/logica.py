@@ -27,48 +27,48 @@ def esta_oscuro(valor, estaba_oscuro):
 
 
 # ==================== DECISIÓN POR ZONA ====================
-# Cada función actualiza el estado de la zona (el diccionario z) y devuelve una
-# lista con los EVENTOS que ocurrieron en esta vuelta (puede estar vacía).
+# Cada función actualiza el estado de la zona (el diccionario "zona") y devuelve
+# una lista con los EVENTOS que ocurrieron en esta vuelta (puede estar vacía).
 
-def evaluar_zona_presencia(z, hay_presencia, ahora):
+def evaluar_zona_presencia(zona, hay_presencia, ahora):
     """Sala y Habitación 1: enciende con presencia y apaga tras TIEMPO_APAGADO.
     Eventos posibles: PRESENCIA, SIN_PRESENCIA, LUZ_ENCENDIDA, LUZ_APAGADA."""
     eventos = []
 
     # Evento solo cuando cambia el estado del sensor
-    if hay_presencia and not z["presencia"]:
+    if hay_presencia and not zona["presencia"]:
         eventos.append("PRESENCIA")
-    elif not hay_presencia and z["presencia"]:
+    elif not hay_presencia and zona["presencia"]:
         eventos.append("SIN_PRESENCIA")
-    z["presencia"] = hay_presencia
+    zona["presencia"] = hay_presencia
 
     if hay_presencia:
-        z["ultima"] = ahora   # reinicia el contador de apagado
-        if not z["luz"]:
-            z["luz"] = True
+        zona["ultima"] = ahora   # reinicia el contador de apagado
+        if not zona["luz"]:
+            zona["luz"] = True
             eventos.append("LUZ_ENCENDIDA")
-    elif z["luz"]:
-        if time.ticks_diff(ahora, z["ultima"]) >= config.TIEMPO_APAGADO * 1000:
-            z["luz"] = False
+    elif zona["luz"]:
+        if time.ticks_diff(ahora, zona["ultima"]) >= config.TIEMPO_APAGADO * 1000:
+            zona["luz"] = False
             eventos.append("LUZ_APAGADA")
 
     return eventos
 
 
-def evaluar_zona_ldr(z, valor):
+def evaluar_zona_ldr(zona, valor):
     """Habitación 2: enciende con poca luz y apaga con luz suficiente.
     Eventos posibles: OSCURIDAD, LUZ_ENCENDIDA, LUZ_SUFICIENTE, LUZ_APAGADA."""
     eventos = []
-    oscuro = esta_oscuro(valor, z["oscuro"])
+    oscuro = esta_oscuro(valor, zona["oscuro"])
 
-    if oscuro and not z["oscuro"]:
-        z["luz"] = True
+    if oscuro and not zona["oscuro"]:
+        zona["luz"] = True
         eventos.append("OSCURIDAD")
         eventos.append("LUZ_ENCENDIDA")
-    elif not oscuro and z["oscuro"]:
-        z["luz"] = False
+    elif not oscuro and zona["oscuro"]:
+        zona["luz"] = False
         eventos.append("LUZ_SUFICIENTE")
         eventos.append("LUZ_APAGADA")
 
-    z["oscuro"] = oscuro
+    zona["oscuro"] = oscuro
     return eventos

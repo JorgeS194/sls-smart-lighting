@@ -35,10 +35,10 @@ hab2 = {"nombre": "HABITACION 2", "bit": config.BIT_HAB2,
         "oscuro": False, "luz": False}
 
 # ==================== EJECUTAR LAS DECISIONES ====================
-def aplicar_evento(z, evento, dato=""):
+def aplicar_evento(zona, evento, dato=""):
     """Ejecuta un evento que decidió logica.py: LED, mensaje y historial.
     'dato' es la distancia (Habitación 1) o el valor del LDR (Habitación 2)."""
-    nombre = z["nombre"]
+    nombre = zona["nombre"]
 
     if evento == "PRESENCIA":
         detalle = "a {} cm".format(dato) if dato != "" else ""
@@ -55,25 +55,25 @@ def aplicar_evento(z, evento, dato=""):
         print("[{}] Luz ambiente suficiente (LDR = {})".format(nombre, dato))
         historial.registrar_evento(nombre, "LUZ_SUFICIENTE", dato)
     elif evento == "LUZ_ENCENDIDA":
-        actuador_leds.poner(z["bit"], True)
+        actuador_leds.poner(zona["bit"], True)
         print("[{}] Luz ENCENDIDA".format(nombre))
         historial.registrar_evento(nombre, "LUZ_ENCENDIDA")
     elif evento == "LUZ_APAGADA":
-        actuador_leds.poner(z["bit"], False)
+        actuador_leds.poner(zona["bit"], False)
         print("[{}] Luz APAGADA".format(nombre))
         historial.registrar_evento(nombre, "LUZ_APAGADA")
 
 
-def procesar_presencia(z, hay_presencia, dato=""):
+def procesar_presencia(zona, hay_presencia, dato=""):
     """Sala y Habitación 1: logica.py decide, main.py ejecuta."""
-    for evento in logica.evaluar_zona_presencia(z, hay_presencia, time.ticks_ms()):
-        aplicar_evento(z, evento, dato)
+    for evento in logica.evaluar_zona_presencia(zona, hay_presencia, time.ticks_ms()):
+        aplicar_evento(zona, evento, dato)
 
 
-def procesar_ldr(z, valor):
+def procesar_ldr(zona, valor):
     """Habitación 2: logica.py decide, main.py ejecuta."""
-    for evento in logica.evaluar_zona_ldr(z, valor):
-        aplicar_evento(z, evento, valor)
+    for evento in logica.evaluar_zona_ldr(zona, valor):
+        aplicar_evento(zona, evento, valor)
 
 # ==================== PROGRAMA PRINCIPAL ====================
 actuador_leds.apagar_todos()   # todos los LEDs apagados al iniciar
