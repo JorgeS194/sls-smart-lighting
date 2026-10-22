@@ -4,9 +4,7 @@ import sensor_pir
 import sensor_ldr
 import sensor_ultrasonico
 import actuador_leds
-# >>> INICIO CSV (descomentar SOLO en un ESP32 real; Wokwi no lo necesita)
-# import os
-# <<< FIN CSV
+import historial
 
 # ==================== PINES (los números vienen de config.py) ====================
 # Sala: el PIR y su interrupción se configuran dentro de sensor_pir.py
@@ -18,35 +16,7 @@ import actuador_leds
 # (la ISR y su bandera viven en sensor_pir.py -> hubo_interrupcion())
 
 # ==================== HISTORIAL Y CSV ====================
-historial = []   # lista en RAM: (tiempo_ms, zona, evento, valor)
-
-def registrar_evento(zona, evento, valor=""):
-    """Guarda el evento en el historial. La escritura al CSV está comentada."""
-    ahora = time.ticks_ms()
-    historial.append((ahora, zona, evento, valor))
-    if len(historial) > config.MAX_HISTORIAL:
-        historial.pop(0)
-    # >>> INICIO CSV (descomentar SOLO en un ESP32 real)
-    # try:
-    #     nuevo = config.ARCHIVO_CSV not in os.listdir()
-    #     with open(config.ARCHIVO_CSV, "a") as f:
-    #         if nuevo:
-    #             f.write("tiempo_ms,zona,evento,valor\n")
-    #         f.write("{},{},{},{}\n".format(ahora, zona, evento, valor))
-    # except OSError as e:
-    #     print("[CSV] No se pudo escribir:", e)
-    # <<< FIN CSV
-
-def exportar_csv():
-    """Imprime el CSV por el puerto serie para copiarlo (llamar desde la REPL)."""
-    # >>> INICIO CSV (descomentar SOLO en un ESP32 real)
-    # try:
-    #     with open(config.ARCHIVO_CSV) as f:
-    #         print(f.read())
-    # except OSError:
-    #     print("[CSV] Aun no existe", config.ARCHIVO_CSV)
-    # <<< FIN CSV
-    pass
+# (el historial y el CSV viven en historial.py -> registrar_evento(), eventos(), exportar_csv())
 
 # ==================== CONTROL DE LOS LEDs ====================
 # (el 74HC595 vive en actuador_leds.py -> poner(bit, encendido), apagar_todos())
@@ -72,10 +42,10 @@ def controlar_zona_presencia(z, hay_presencia, detalle=""):
     # Mensajes solo cuando cambia el estado del sensor
     if hay_presencia and not z["presencia"]:
         print("[{}] Presencia detectada{}".format(z["nombre"], detalle))
-        registrar_evento(z["nombre"], "PRESENCIA", detalle.strip(" ()"))
+        historial.registrar_evento(z["nombre"], "PRESENCIA", detalle.strip(" ()"))
     elif not hay_presencia and z["presencia"]:
         print("[{}] Sin presencia".format(z["nombre"]))
-        registrar_evento(z["nombre"], "SIN_PRESENCIA")
+        historial.registrar_evento(z["nombre"], "SIN_PRESENCIA")
     z["presencia"] = hay_presencia
 
     if hay_presencia:
@@ -84,13 +54,13 @@ def controlar_zona_presencia(z, hay_presencia, detalle=""):
             actuador_leds.poner(z["bit"], True)
             z["luz"] = True
             print("[{}] Luz ENCENDIDA".format(z["nombre"]))
-            registrar_evento(z["nombre"], "LUZ_ENCENDIDA")
+            historial.registrar_evento(z["nombre"], "LUZ_ENCENDIDA")
     elif z["luz"]:
         if time.ticks_diff(ahora, z["ultima"]) >= config.TIEMPO_APAGADO * 1000:
             actuador_leds.poner(z["bit"], False)
             z["luz"] = False
             print("[{}] Luz APAGADA".format(z["nombre"]))
-            registrar_evento(z["nombre"], "LUZ_APAGADA")
+            historial.registrar_evento(z["nombre"], "LUZ_APAGADA")
 
 def controlar_zona_ldr(z, valor):
     """Habitación 2: enciende con poca luz y apaga con luz suficiente."""
@@ -108,18 +78,18 @@ def controlar_zona_ldr(z, valor):
 
     if oscuro and not z["oscuro"]:
         print("[{}] Oscuridad detectada (LDR = {})".format(z["nombre"], valor))
-        registrar_evento(z["nombre"], "OSCURIDAD", valor)
+        historial.registrar_evento(z["nombre"], "OSCURIDAD", valor)
         actuador_leds.poner(z["bit"], True)
         z["luz"] = True
         print("[{}] Luz ENCENDIDA".format(z["nombre"]))
-        registrar_evento(z["nombre"], "LUZ_ENCENDIDA")
+        historial.registrar_evento(z["nombre"], "LUZ_ENCENDIDA")
     elif not oscuro and z["oscuro"]:
         print("[{}] Luz ambiente suficiente (LDR = {})".format(z["nombre"], valor))
-        registrar_evento(z["nombre"], "LUZ_SUFICIENTE", valor)
+        historial.registrar_evento(z["nombre"], "LUZ_SUFICIENTE", valor)
         actuador_leds.poner(z["bit"], False)
         z["luz"] = False
         print("[{}] Luz APAGADA".format(z["nombre"]))
-        registrar_evento(z["nombre"], "LUZ_APAGADA")
+        historial.registrar_evento(z["nombre"], "LUZ_APAGADA")
     z["oscuro"] = oscuro
 
 # ==================== PROGRAMA PRINCIPAL ====================
@@ -143,7 +113,7 @@ while True:
     hubo_irq = sensor_pir.hubo_interrupcion()   # True una sola vez por interrupción
     if hubo_irq:
         print("[SALA] Interrupcion de hardware del PIR (IRQ #{})".format(sensor_pir.contador()))
-        registrar_evento("SALA", "IRQ_PIR", sensor_pir.contador())
+        historial.registrar_evento("SALA", "IRQ_PIR", sensor_pir.contador())
     controlar_zona_presencia(sala, hubo_irq or sensor_pir.hay_movimiento())
 
     # Habitación 1: HC-SR04
