@@ -1,5 +1,6 @@
 import time
 import config
+import logica
 import sensor_pir
 import sensor_ldr
 import sensor_ultrasonico
@@ -12,19 +13,18 @@ import historial
 # Habitación 2: el LDR se configura dentro de sensor_ldr.py
 # LEDs: el 74HC595 (DS, STCP, SHCP) se configura dentro de actuador_leds.py
 
-# ==================== INTERRUPCIÓN DE HARDWARE (PIR) ====================
-# (la ISR y su bandera viven en sensor_pir.py -> hubo_interrupcion())
-
-# ==================== HISTORIAL Y CSV ====================
-# (el historial y el CSV viven en historial.py -> registrar_evento(), eventos(), exportar_csv())
-
-# ==================== CONTROL DE LOS LEDs ====================
-# (el 74HC595 vive en actuador_leds.py -> poner(bit, encendido), apagar_todos())
-
 # ==================== LECTURA DE SENSORES ====================
 # (el PIR vive en sensor_pir.py -> hubo_interrupcion(), hay_movimiento())
 # (la medición del HC-SR04 vive en sensor_ultrasonico.py -> medir_cm())
 # (la lectura del LDR vive en sensor_ldr.py -> leer())
+
+# ==================== DECISIONES ====================
+# (la lógica vive en logica.py -> hay_presencia_distancia(), esta_oscuro(),
+#  evaluar_zona_presencia(), evaluar_zona_ldr())
+
+# ==================== ACTUADORES Y REGISTRO ====================
+# (el 74HC595 vive en actuador_leds.py -> poner(bit, encendido), apagar_todos())
+# (el historial y el CSV viven en historial.py -> registrar_evento())
 
 # ==================== ESTADO DE CADA ZONA ====================
 sala = {"nombre": "SALA", "bit": config.BIT_SALA,
@@ -34,63 +34,46 @@ hab1 = {"nombre": "HABITACION 1", "bit": config.BIT_HAB1,
 hab2 = {"nombre": "HABITACION 2", "bit": config.BIT_HAB2,
         "oscuro": False, "luz": False}
 
-# ==================== LÓGICA DE LAS ZONAS ====================
-def controlar_zona_presencia(z, hay_presencia, detalle=""):
-    """Sala y Habitación 1: enciende con presencia y apaga tras TIEMPO_APAGADO."""
-    ahora = time.ticks_ms()
+# ==================== EJECUTAR LAS DECISIONES ====================
+def aplicar_evento(z, evento, dato=""):
+    """Ejecuta un evento que decidió logica.py: LED, mensaje y historial.
+    'dato' es la distancia (Habitación 1) o el valor del LDR (Habitación 2)."""
+    nombre = z["nombre"]
 
-    # Mensajes solo cuando cambia el estado del sensor
-    if hay_presencia and not z["presencia"]:
-        print("[{}] Presencia detectada{}".format(z["nombre"], detalle))
-        historial.registrar_evento(z["nombre"], "PRESENCIA", detalle.strip(" ()"))
-    elif not hay_presencia and z["presencia"]:
-        print("[{}] Sin presencia".format(z["nombre"]))
-        historial.registrar_evento(z["nombre"], "SIN_PRESENCIA")
-    z["presencia"] = hay_presencia
-
-    if hay_presencia:
-        z["ultima"] = ahora   # reinicia el contador de apagado
-        if not z["luz"]:
-            actuador_leds.poner(z["bit"], True)
-            z["luz"] = True
-            print("[{}] Luz ENCENDIDA".format(z["nombre"]))
-            historial.registrar_evento(z["nombre"], "LUZ_ENCENDIDA")
-    elif z["luz"]:
-        if time.ticks_diff(ahora, z["ultima"]) >= config.TIEMPO_APAGADO * 1000:
-            actuador_leds.poner(z["bit"], False)
-            z["luz"] = False
-            print("[{}] Luz APAGADA".format(z["nombre"]))
-            historial.registrar_evento(z["nombre"], "LUZ_APAGADA")
-
-def controlar_zona_ldr(z, valor):
-    """Habitación 2: enciende con poca luz y apaga con luz suficiente."""
-    # Con histéresis: el umbral cambia según el estado actual
-    if config.OSCURO_ES_VALOR_ALTO:
-        if z["oscuro"]:
-            oscuro = valor > config.UMBRAL_LUZ - config.HISTERESIS_LUZ
-        else:
-            oscuro = valor > config.UMBRAL_LUZ + config.HISTERESIS_LUZ
-    else:
-        if z["oscuro"]:
-            oscuro = valor < config.UMBRAL_LUZ + config.HISTERESIS_LUZ
-        else:
-            oscuro = valor < config.UMBRAL_LUZ - config.HISTERESIS_LUZ
-
-    if oscuro and not z["oscuro"]:
-        print("[{}] Oscuridad detectada (LDR = {})".format(z["nombre"], valor))
-        historial.registrar_evento(z["nombre"], "OSCURIDAD", valor)
+    if evento == "PRESENCIA":
+        detalle = "a {} cm".format(dato) if dato != "" else ""
+        mostrado = " ({})".format(detalle) if detalle else ""
+        print("[{}] Presencia detectada{}".format(nombre, mostrado))
+        historial.registrar_evento(nombre, "PRESENCIA", detalle)
+    elif evento == "SIN_PRESENCIA":
+        print("[{}] Sin presencia".format(nombre))
+        historial.registrar_evento(nombre, "SIN_PRESENCIA")
+    elif evento == "OSCURIDAD":
+        print("[{}] Oscuridad detectada (LDR = {})".format(nombre, dato))
+        historial.registrar_evento(nombre, "OSCURIDAD", dato)
+    elif evento == "LUZ_SUFICIENTE":
+        print("[{}] Luz ambiente suficiente (LDR = {})".format(nombre, dato))
+        historial.registrar_evento(nombre, "LUZ_SUFICIENTE", dato)
+    elif evento == "LUZ_ENCENDIDA":
         actuador_leds.poner(z["bit"], True)
-        z["luz"] = True
-        print("[{}] Luz ENCENDIDA".format(z["nombre"]))
-        historial.registrar_evento(z["nombre"], "LUZ_ENCENDIDA")
-    elif not oscuro and z["oscuro"]:
-        print("[{}] Luz ambiente suficiente (LDR = {})".format(z["nombre"], valor))
-        historial.registrar_evento(z["nombre"], "LUZ_SUFICIENTE", valor)
+        print("[{}] Luz ENCENDIDA".format(nombre))
+        historial.registrar_evento(nombre, "LUZ_ENCENDIDA")
+    elif evento == "LUZ_APAGADA":
         actuador_leds.poner(z["bit"], False)
-        z["luz"] = False
-        print("[{}] Luz APAGADA".format(z["nombre"]))
-        historial.registrar_evento(z["nombre"], "LUZ_APAGADA")
-    z["oscuro"] = oscuro
+        print("[{}] Luz APAGADA".format(nombre))
+        historial.registrar_evento(nombre, "LUZ_APAGADA")
+
+
+def procesar_presencia(z, hay_presencia, dato=""):
+    """Sala y Habitación 1: logica.py decide, main.py ejecuta."""
+    for evento in logica.evaluar_zona_presencia(z, hay_presencia, time.ticks_ms()):
+        aplicar_evento(z, evento, dato)
+
+
+def procesar_ldr(z, valor):
+    """Habitación 2: logica.py decide, main.py ejecuta."""
+    for evento in logica.evaluar_zona_ldr(z, valor):
+        aplicar_evento(z, evento, valor)
 
 # ==================== PROGRAMA PRINCIPAL ====================
 actuador_leds.apagar_todos()   # todos los LEDs apagados al iniciar
@@ -114,17 +97,16 @@ while True:
     if hubo_irq:
         print("[SALA] Interrupcion de hardware del PIR (IRQ #{})".format(sensor_pir.contador()))
         historial.registrar_evento("SALA", "IRQ_PIR", sensor_pir.contador())
-    controlar_zona_presencia(sala, hubo_irq or sensor_pir.hay_movimiento())
+    procesar_presencia(sala, hubo_irq or sensor_pir.hay_movimiento())
 
     # Habitación 1: HC-SR04
     distancia = sensor_ultrasonico.medir_cm()
-    hay_alguien = distancia is not None and distancia < config.DISTANCIA_PRESENCIA
-    detalle = " (a {} cm)".format(int(distancia)) if hay_alguien else ""
-    controlar_zona_presencia(hab1, hay_alguien, detalle)
+    hay_alguien = logica.hay_presencia_distancia(distancia)
+    procesar_presencia(hab1, hay_alguien, int(distancia) if hay_alguien else "")
 
     # Habitación 2: LDR
     valor_ldr = sensor_ldr.leer()
-    controlar_zona_ldr(hab2, valor_ldr)
+    procesar_ldr(hab2, valor_ldr)
 
     # Ayuda de calibración (opcional)
     if config.DEPURAR_LDR and time.ticks_diff(time.ticks_ms(), ultimo_debug) >= 1000:
