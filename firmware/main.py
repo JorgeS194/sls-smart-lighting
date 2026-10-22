@@ -1,24 +1,21 @@
-from machine import Pin
 import time
 import config
 import sensor_pir
 import sensor_ldr
 import sensor_ultrasonico
+import actuador_leds
 # >>> INICIO CSV (descomentar SOLO en un ESP32 real; Wokwi no lo necesita)
 # import os
 # <<< FIN CSV
 
 # ==================== PINES (los números vienen de config.py) ====================
-# Sala: el PIR y su interrupción ahora se configuran dentro de sensor_pir.py
-# Habitación 1: el HC-SR04 ahora se configura dentro de sensor_ultrasonico.py
-# Habitación 2: el LDR ahora se configura dentro de sensor_ldr.py
-
-ds = Pin(config.PIN_DS, Pin.OUT)             # 74HC595: DS   (datos)
-stcp = Pin(config.PIN_STCP, Pin.OUT)         # 74HC595: STCP (latch)
-shcp = Pin(config.PIN_SHCP, Pin.OUT)         # 74HC595: SHCP (reloj)
+# Sala: el PIR y su interrupción se configuran dentro de sensor_pir.py
+# Habitación 1: el HC-SR04 se configura dentro de sensor_ultrasonico.py
+# Habitación 2: el LDR se configura dentro de sensor_ldr.py
+# LEDs: el 74HC595 (DS, STCP, SHCP) se configura dentro de actuador_leds.py
 
 # ==================== INTERRUPCIÓN DE HARDWARE (PIR) ====================
-# (la ISR y su bandera viven ahora en sensor_pir.py -> hubo_interrupcion())
+# (la ISR y su bandera viven en sensor_pir.py -> hubo_interrupcion())
 
 # ==================== HISTORIAL Y CSV ====================
 historial = []   # lista en RAM: (tiempo_ms, zona, evento, valor)
@@ -51,38 +48,13 @@ def exportar_csv():
     # <<< FIN CSV
     pass
 
-# ==================== CONTROL DEL 74HC595 ====================
-estado_leds = 0b00000000   # bit 0 = Q0 ... bit 7 = Q7
-
-def actualizar_595():
-    """Envía el byte estado_leds al 74HC595 (primero Q7, al final Q0)."""
-    stcp.value(0)
-    for i in range(7, -1, -1):
-        ds.value((estado_leds >> i) & 1)
-        shcp.value(1)
-        shcp.value(0)
-    stcp.value(1)   # el latch pasa los bits a las salidas
-    stcp.value(0)
-
-def poner_led(bit, encendido):
-    """Enciende o apaga un solo LED sin afectar a los demás."""
-    global estado_leds
-    if encendido:
-        estado_leds |= (1 << bit)
-    else:
-        estado_leds &= ~(1 << bit)
-    estado_leds &= 0xFF
-    actualizar_595()
-
-def apagar_todos():
-    global estado_leds
-    estado_leds = 0
-    actualizar_595()
+# ==================== CONTROL DE LOS LEDs ====================
+# (el 74HC595 vive en actuador_leds.py -> poner(bit, encendido), apagar_todos())
 
 # ==================== LECTURA DE SENSORES ====================
-# (el PIR vive ahora en sensor_pir.py -> hubo_interrupcion(), hay_movimiento())
-# (la medición del HC-SR04 vive ahora en sensor_ultrasonico.py -> medir_cm())
-# (la lectura del LDR vive ahora en sensor_ldr.py -> sensor_ldr.leer())
+# (el PIR vive en sensor_pir.py -> hubo_interrupcion(), hay_movimiento())
+# (la medición del HC-SR04 vive en sensor_ultrasonico.py -> medir_cm())
+# (la lectura del LDR vive en sensor_ldr.py -> leer())
 
 # ==================== ESTADO DE CADA ZONA ====================
 sala = {"nombre": "SALA", "bit": config.BIT_SALA,
@@ -109,13 +81,13 @@ def controlar_zona_presencia(z, hay_presencia, detalle=""):
     if hay_presencia:
         z["ultima"] = ahora   # reinicia el contador de apagado
         if not z["luz"]:
-            poner_led(z["bit"], True)
+            actuador_leds.poner(z["bit"], True)
             z["luz"] = True
             print("[{}] Luz ENCENDIDA".format(z["nombre"]))
             registrar_evento(z["nombre"], "LUZ_ENCENDIDA")
     elif z["luz"]:
         if time.ticks_diff(ahora, z["ultima"]) >= config.TIEMPO_APAGADO * 1000:
-            poner_led(z["bit"], False)
+            actuador_leds.poner(z["bit"], False)
             z["luz"] = False
             print("[{}] Luz APAGADA".format(z["nombre"]))
             registrar_evento(z["nombre"], "LUZ_APAGADA")
@@ -137,21 +109,21 @@ def controlar_zona_ldr(z, valor):
     if oscuro and not z["oscuro"]:
         print("[{}] Oscuridad detectada (LDR = {})".format(z["nombre"], valor))
         registrar_evento(z["nombre"], "OSCURIDAD", valor)
-        poner_led(z["bit"], True)
+        actuador_leds.poner(z["bit"], True)
         z["luz"] = True
         print("[{}] Luz ENCENDIDA".format(z["nombre"]))
         registrar_evento(z["nombre"], "LUZ_ENCENDIDA")
     elif not oscuro and z["oscuro"]:
         print("[{}] Luz ambiente suficiente (LDR = {})".format(z["nombre"], valor))
         registrar_evento(z["nombre"], "LUZ_SUFICIENTE", valor)
-        poner_led(z["bit"], False)
+        actuador_leds.poner(z["bit"], False)
         z["luz"] = False
         print("[{}] Luz APAGADA".format(z["nombre"]))
         registrar_evento(z["nombre"], "LUZ_APAGADA")
     z["oscuro"] = oscuro
 
 # ==================== PROGRAMA PRINCIPAL ====================
-apagar_todos()   # todos los LEDs apagados al iniciar
+actuador_leds.apagar_todos()   # todos los LEDs apagados al iniciar
 
 print("=================================")
 print(" CASA INTELIGENTE - ESP32")
