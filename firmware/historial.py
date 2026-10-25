@@ -1,6 +1,7 @@
 # historial.py: registro de eventos en RAM y, en un ESP32 real, en un CSV.
 # Este archivo SOLO guarda y exporta eventos. Decidir QUÉ evento ocurrió
-# es responsabilidad de main.py (más adelante, de logica.py).
+# es responsabilidad de logica.py; controlador.py registra sus decisiones
+# y main.py registra directamente la IRQ del PIR.
 
 import time
 import config
@@ -14,7 +15,11 @@ _eventos = []
 
 
 def registrar_evento(zona, evento, valor=""):
-    """Guarda el evento en el historial. La escritura al CSV está comentada."""
+    """Guarda el evento; zona es su nombre (texto), no el diccionario de zonas.py.
+
+    Se conserva el parámetro zona para admitir llamadas existentes por nombre.
+    La escritura al CSV está comentada.
+    """
     ahora = time.ticks_ms()
     _eventos.append((ahora, zona, evento, valor))
     if len(_eventos) > config.MAX_HISTORIAL:

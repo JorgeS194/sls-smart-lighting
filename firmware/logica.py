@@ -2,7 +2,7 @@
 # cuándo se enciende o se apaga una luz).
 # Este archivo NO toca hardware, NO imprime y NO guarda historial: solo recibe
 # valores, decide y devuelve qué pasó. Ejecutar esas decisiones (LEDs, print,
-# historial) es responsabilidad de main.py.
+# historial) es responsabilidad de controlador.py.
 
 import time
 import config
