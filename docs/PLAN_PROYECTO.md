@@ -42,6 +42,21 @@ Alguien entra a la sala:
 
 ## 3. Estructura objetivo del repositorio
 
+La separación del firmware ya está implementada: `main.py` lee sensores y
+coordina el ciclo; `zonas.py` guarda el estado; `logica.py` clasifica lecturas y
+actualiza ese estado devolviendo eventos; `controlador.py` aplica los eventos
+(LEDs, consola e historial). `historial.py` conserva eventos en RAM y mantiene
+la escritura CSV comentada para la placa real. La IRQ del PIR se registra desde
+`main.py`, que también usa `logica.py` para clasificar la distancia; ambos imports
+siguen siendo necesarios. `registrar_evento(zona, evento, valor)` recibe el nombre
+de zona como texto; se conserva `zona` para compatibilidad con llamadas por nombre.
+MQTT, JSON y los módulos de red de la estructura objetivo siguen pendientes.
+
+La prueba `python tests/prueba_main.py` carga módulos nuevos en cada corrida,
+simula dos IRQ y comprueba eventos, LEDs y CSV sin modificar el firmware.
+Antes de pedir revisión queda registrar evidencia de ejecución en Wokwi,
+copiando todos los módulos de `firmware/` al mismo nivel.
+
 ```
 sls-smart-lighting/
 ├── README.md
@@ -53,6 +68,9 @@ sls-smart-lighting/
 │   ├── config.py                # ENTORNO ("wokwi"/"real"), pines, umbrales, tópicos
 │   ├── secrets_example.py       # plantilla; secrets.py real NO se sube
 │   ├── logica.py                # funciones puras: histéresis, clasificación
+│   ├── zonas.py                 # estado mutable de las tres zonas
+│   ├── controlador.py           # aplica eventos: LEDs, consola e historial
+│   ├── historial.py             # historial RAM y CSV opcional en placa real
 │   ├── sensor_pir.py            # PIR + interrupción
 │   ├── sensor_ultrasonico.py
 │   ├── sensor_ldr.py

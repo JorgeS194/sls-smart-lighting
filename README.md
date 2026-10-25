@@ -45,7 +45,7 @@ sls-smart-lighting/
 
 ### 1. Firmware en Wokwi
 1. Abre el proyecto: <https://wokwi.com/projects/476828453604708353>
-2. Reemplaza el contenido de `main.py` por el de [`firmware/main.py`](firmware/main.py).
+2. Copia todos los archivos `.py` de `firmware/` al proyecto, en un mismo nivel y conservando sus nombres. `main.py` importa los demás módulos; copiarlo solo no basta.
 3. Inicia la simulación y mueve el PIR, cambia la distancia del HC-SR04 o la luz del LDR. Verás los mensajes en la consola, por ejemplo `Interrupcion de hardware del PIR (IRQ #1)`.
 
 ### 2. Simulación de sensores en Python (Etapa 2)
@@ -61,6 +61,11 @@ Genera `estado.json` e `historial.csv` en la carpeta desde donde lo ejecutas (es
 ```bash
 python tests/prueba_main.py
 ```
+
+La prueba carga los módulos con hardware simulado y verifica las dos IRQ del PIR,
+los eventos de las tres zonas, el apagado de los LEDs y la equivalencia del CSV
+con el historial en RAM. Activa el CSV solo en una copia en memoria de
+`historial.py` y usa un directorio temporal. No sustituye la validación en Wokwi.
 
 ## Equipo y roles
 

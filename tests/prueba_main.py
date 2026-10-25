@@ -8,8 +8,13 @@ import os
 import re
 import sys
 import tempfile
-import time
 import types
+from contextlib import contextmanager
+from pathlib import Path
+from unittest.mock import patch
+
+FIRMWARE = Path(__file__).resolve().parents[1] / "firmware"
+MODULOS = tuple(p.stem for p in FIRMWARE.glob("*.py") if p.stem != "main")
 
 CICLOS = 150
 INICIO_BLOQUE = ">>> INICIO CSV"
@@ -18,6 +23,16 @@ FIN_BLOQUE = "<<< FIN CSV"
 
 class FinPrueba(BaseException):
     pass
+
+
+@contextmanager
+def directorio(ruta):
+    anterior = os.getcwd()
+    try:
+        os.chdir(ruta)
+        yield
+    finally:
+        os.chdir(anterior)
 
 
 def descomentar_csv(fuente):
@@ -33,7 +48,7 @@ def descomentar_csv(fuente):
     return "\n".join(salida) + "\n"
 
 
-def ejecutar(fuente, etiqueta):
+def ejecutar(fuente, etiqueta, csv=False):
     estado = {"ciclo": 0, "ms": 0, "pines": {}, "log": []}
 
     # ---- escenario (depende del ciclo) ----
@@ -80,12 +95,12 @@ def ejecutar(fuente, etiqueta):
 
     machine = types.ModuleType("machine")
     machine.Pin, machine.ADC, machine.time_pulse_us = Pin, ADC, time_pulse_us
-    sys.modules["machine"] = machine
 
     # ---- extensiones MicroPython del modulo time ----
-    time.ticks_ms = lambda: estado["ms"]
-    time.ticks_diff = lambda a, b: a - b
-    time.sleep_us = lambda us: None
+    reloj = types.ModuleType("time")
+    reloj.ticks_ms = lambda: estado["ms"]
+    reloj.ticks_diff = lambda a, b: a - b
+    reloj.sleep_us = lambda us: None
 
     def sleep_ms(ms):
         estado["ms"] += ms
@@ -98,13 +113,22 @@ def ejecutar(fuente, etiqueta):
         if estado["ciclo"] >= CICLOS:
             raise FinPrueba()
 
-    time.sleep_ms = sleep_ms
+    reloj.sleep_ms = sleep_ms
 
     import io
     import contextlib
     buf = io.StringIO()
     ns = {"__name__": "__main__"}
-    with contextlib.redirect_stdout(buf):
+    # Cada corrida importa estado nuevo y restaura los módulos y rutas del proceso.
+    with patch.dict(sys.modules), patch.object(sys, "path", [str(FIRMWARE)] + sys.path), contextlib.redirect_stdout(buf):
+        for nombre in MODULOS:
+            sys.modules.pop(nombre, None)
+        sys.modules.update(machine=machine, time=reloj)
+        if csv:
+            modulo = types.ModuleType("historial")
+            sys.modules["historial"] = modulo
+            codigo = descomentar_csv((FIRMWARE / "historial.py").read_text(encoding="utf-8"))
+            exec(compile(codigo, "historial_csv.py", "exec"), modulo.__dict__)
         try:
             exec(compile(fuente, etiqueta, "exec"), ns)
         except FinPrueba:
@@ -117,19 +141,39 @@ if __name__ == "__main__":
     with open(ruta, encoding="utf-8") as f:
         original = f.read()
 
-    trabajo = tempfile.mkdtemp()
-    os.chdir(trabajo)
-
-    print("=== PRUEBA A: main.py tal como se entrega (CSV comentado) ===")
-    salida, ns = ejecutar(original, "main.py")
-    print(salida)
-    print("IRQ atendidas:", ns["contador_irq"],
-          "| eventos en RAM:", len(ns["historial"]),
-          "| historial.csv existe:", os.path.exists("historial.csv"))
-
-    print("\n=== PRUEBA B: CSV descomentado (como en un ESP32 real) ===")
-    salida_b, ns_b = ejecutar(descomentar_csv(original), "main_csv.py")
-    print("Salida de consola identica a la prueba A:", salida == salida_b)
-    print("historial.csv existe:", os.path.exists("historial.csv"))
-    with open("historial.csv") as f:
-        print(f.read())
+    anterior = os.getcwd()
+    try:
+        with tempfile.TemporaryDirectory() as trabajo, directorio(trabajo):
+            salida, ns = ejecutar(original, "main.py")
+            eventos = ns["historial"].eventos()
+            assert ns["sensor_pir"].contador() == 2
+            assert not os.path.exists("historial.csv")
+            assert len(eventos) == 16, eventos
+            assert [e[3] for e in eventos if e[2] == "IRQ_PIR"] == [1, 2]
+            assert [(e[1], e[2]) for e in eventos] == [
+                ("SALA", "IRQ_PIR"), ("SALA", "PRESENCIA"),
+                ("SALA", "LUZ_ENCENDIDA"), ("SALA", "SIN_PRESENCIA"),
+                ("HABITACION 1", "PRESENCIA"), ("HABITACION 1", "LUZ_ENCENDIDA"),
+                ("SALA", "IRQ_PIR"), ("SALA", "PRESENCIA"),
+                ("SALA", "SIN_PRESENCIA"), ("HABITACION 1", "SIN_PRESENCIA"),
+                ("HABITACION 2", "OSCURIDAD"), ("HABITACION 2", "LUZ_ENCENDIDA"),
+                ("SALA", "LUZ_APAGADA"), ("HABITACION 1", "LUZ_APAGADA"),
+                ("HABITACION 2", "LUZ_SUFICIENTE"), ("HABITACION 2", "LUZ_APAGADA")]
+            assert eventos[12][0] - eventos[7][0] == ns["config"].TIEMPO_APAGADO * 1000
+            assert eventos[13][0] - eventos[4][0] >= ns["config"].TIEMPO_APAGADO * 1000
+            for zona in ("SALA", "HABITACION 1", "HABITACION 2"):
+                assert sum(e[1:3] == (zona, "LUZ_ENCENDIDA") for e in eventos) == 1
+                assert sum(e[1:3] == (zona, "LUZ_APAGADA") for e in eventos) == 1
+            assert ns["actuador_leds"]._estado == 0
+            salida_b, ns_b = ejecutar(original, "main_csv.py", csv=True)
+            assert salida == salida_b
+            assert eventos == ns_b["historial"].eventos()
+            with open("historial.csv") as f:
+                filas = f.read().splitlines()
+            assert filas == ["tiempo_ms,zona,evento,valor"] + [
+                ",".join(map(str, evento)) for evento in eventos]
+            print(salida)
+            print("OK: dos IRQ, 16 eventos, LEDs apagados y CSV idéntico al historial RAM")
+            os.chdir(anterior)
+    finally:
+        os.chdir(anterior)

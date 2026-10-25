@@ -3,15 +3,18 @@
 Código MicroPython del ESP32. **Esta carpeta es plana a propósito**: Wokwi web mantiene los archivos en un solo nivel, así que lo que hay aquí se pega tal cual en Wokwi y se copia igual a la placa física. Los módulos se distinguen por prefijo (`sensor_`, `actuador_`), no por subcarpeta.
 
 ## Estado actual
-- `main.py`: versión entregada en la Etapa 2, **sin dividir** (misma lógica, mismos umbrales). Incluye sensores PIR (con interrupción), HC-SR04 y LDR, control de LEDs por 74HC595 y registro de eventos con escritura a CSV comentada.
+- El firmware ya está dividido en módulos, con la lógica y los umbrales de la Etapa 2. `main.py` coordina sensores y controlador; `zonas.py` guarda el estado, `logica.py` decide, `controlador.py` aplica eventos y `historial.py` registra en RAM con escritura CSV comentada. Copia todos los `.py` al mismo nivel en Wokwi o la placa.
 
-## Plan de división en módulos
+## Módulos actuales y previstos
 | Archivo | Contenido |
 |---|---|
 | `main.py` | Solo el ciclo principal (orquesta) |
 | `config.py` | `ENTORNO` ("wokwi" / "real"), pines, umbrales, tiempos, tópicos MQTT |
 | `secrets_example.py` | Plantilla de credenciales. El `secrets.py` real **no se sube** |
-| `logica.py` | Funciones puras: histéresis, clasificación (sin `machine`) |
+| `logica.py` | Clasificación, histéresis y decisiones que actualizan el estado (sin `machine`) |
+| `zonas.py` | Estado de Sala, Habitación 1 y Habitación 2 |
+| `controlador.py` | Ejecuta eventos: LEDs, consola e historial |
+| `historial.py` | Registro en RAM y CSV opcional para placa real |
 | `sensor_pir.py` | PIR e interrupción |
 | `sensor_ultrasonico.py` | HC-SR04 |
 | `sensor_ldr.py` | LDR |
@@ -21,6 +24,8 @@ Código MicroPython del ESP32. **Esta carpeta es plana a propósito**: Wokwi web
 | `mensajes.py` | Arma el JSON de cada mensaje |
 
 Regla: después de **cada** corte de módulo se prueba en Wokwi que el comportamiento sea idéntico antes de seguir.
+
+`actuador_ventilador.py`, `red.py` y `mensajes.py` son módulos previstos para la Etapa 3.
 
 ## Subir a la placa física (ejemplo)
 ```bash
