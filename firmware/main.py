@@ -1,6 +1,7 @@
 import time
 import config
 import logica
+import zonas
 import sensor_pir
 import sensor_ldr
 import sensor_ultrasonico
@@ -27,12 +28,7 @@ import historial
 # (el historial y el CSV viven en historial.py -> registrar_evento())
 
 # ==================== ESTADO DE CADA ZONA ====================
-sala = {"nombre": "SALA", "bit": config.BIT_SALA,
-        "presencia": False, "luz": False, "ultima": 0}
-hab1 = {"nombre": "HABITACION 1", "bit": config.BIT_HAB1,
-        "presencia": False, "luz": False, "ultima": 0}
-hab2 = {"nombre": "HABITACION 2", "bit": config.BIT_HAB2,
-        "oscuro": False, "luz": False}
+# (el estado de sala, hab1 y hab2 vive en zonas.py -> zonas.sala, zonas.hab1, zonas.hab2)
 
 # ==================== EJECUTAR LAS DECISIONES ====================
 def aplicar_evento(zona, evento, dato=""):
@@ -97,16 +93,16 @@ while True:
     if hubo_irq:
         print("[SALA] Interrupcion de hardware del PIR (IRQ #{})".format(sensor_pir.contador()))
         historial.registrar_evento("SALA", "IRQ_PIR", sensor_pir.contador())
-    procesar_presencia(sala, hubo_irq or sensor_pir.hay_movimiento())
+    procesar_presencia(zonas.sala, hubo_irq or sensor_pir.hay_movimiento())
 
     # Habitación 1: HC-SR04
     distancia = sensor_ultrasonico.medir_cm()
     hay_alguien = logica.hay_presencia_distancia(distancia)
-    procesar_presencia(hab1, hay_alguien, int(distancia) if hay_alguien else "")
+    procesar_presencia(zonas.hab1, hay_alguien, int(distancia) if hay_alguien else "")
 
     # Habitación 2: LDR
     valor_ldr = sensor_ldr.leer()
-    procesar_ldr(hab2, valor_ldr)
+    procesar_ldr(zonas.hab2, valor_ldr)
 
     # Ayuda de calibración (opcional)
     if config.DEPURAR_LDR and time.ticks_diff(time.ticks_ms(), ultimo_debug) >= 1000:
