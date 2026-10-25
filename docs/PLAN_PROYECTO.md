@@ -50,7 +50,22 @@ la escritura CSV comentada para la placa real. La IRQ del PIR se registra desde
 `main.py`, que también usa `logica.py` para clasificar la distancia; ambos imports
 siguen siendo necesarios. `registrar_evento(zona, evento, valor)` recibe el nombre
 de zona como texto; se conserva `zona` para compatibilidad con llamadas por nombre.
-MQTT, JSON y los módulos de red de la estructura objetivo siguen pendientes.
+`red.py` y `mensajes.py` implementan la primera parte de comunicación: WiFi,
+MQTT de eventos JSON, cola limitada, reintentos y latidos. La red está desactivada
+por defecto y no hay broker configurado. El hilo de red no lee sensores ni toca
+LEDs; recibe los eventos del controlador y la IRQ del PIR desde `main.py`.
+Las pruebas simuladas cubren WiFi ausente, broker caído, reenvío, límite de cola
+y equivalencia del control local. Falta probar la conexión externa en Wokwi.
+El dashboard local y un backend Python inicial ya están implementados: plano de
+las tres zonas, lecturas, historial, filtros, importación JSON, exportación CSV y
+persistencia SQLite. El modo demo es independiente de los datos recibidos.
+El receptor MQTT opcional es de solo lectura y se configura explícitamente;
+falta validar el recorrido completo con el broker y Wokwi. Comandos MQTT,
+autenticación/TLS y despliegue en nube siguen pendientes.
+
+La persistencia inicial usa transacciones SQLite en `backend/datos/`, entrega el
+estado como JSON por HTTP y exporta el historial como CSV. Esto sustituye por ahora
+la reescritura de `estado.json`/`historial.csv` en cada evento prevista en el plan.
 
 La prueba `python tests/prueba_main.py` carga módulos nuevos en cada corrida,
 simula dos IRQ y comprueba eventos, LEDs y CSV sin modificar el firmware.
@@ -67,7 +82,7 @@ sls-smart-lighting/
 │   ├── main.py                  # solo el ciclo principal
 │   ├── config.py                # ENTORNO ("wokwi"/"real"), pines, umbrales, tópicos
 │   ├── secrets_example.py       # plantilla; secrets.py real NO se sube
-│   ├── logica.py                # funciones puras: histéresis, clasificación
+│   ├── logica.py                # clasificación y decisiones; actualiza zonas
 │   ├── zonas.py                 # estado mutable de las tres zonas
 │   ├── controlador.py           # aplica eventos: LEDs, consola e historial
 │   ├── historial.py             # historial RAM y CSV opcional en placa real
