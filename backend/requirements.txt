@@ -1,3 +1,2 @@
-# Dependencias del backend (Python 3).
-# Se llenará en la Etapa 3 cuando el equipo decida el protocolo y la plataforma
-# (por ejemplo, un cliente MQTT). Agrega aquí cada librería con su versión.
+# La API HTTP utiliza la biblioteca estándar de Python.
+paho-mqtt==2.1.0
