@@ -9,6 +9,7 @@ import time
 import logica
 import actuador_leds
 import historial
+import red
 
 
 def aplicar_evento(zona, evento, dato=""):
@@ -38,6 +39,9 @@ def aplicar_evento(zona, evento, dato=""):
         actuador_leds.poner(zona["bit"], False)
         print("[{}] Luz APAGADA".format(nombre))
         historial.registrar_evento(nombre, "LUZ_APAGADA")
+
+    # Enviar el dato numérico original sin cambiar consola ni historial local.
+    red.encolar(nombre, evento, dato, zona["luz"])
 
 
 def procesar_presencia(zona, hay_presencia, dato=""):

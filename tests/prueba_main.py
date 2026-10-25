@@ -48,8 +48,9 @@ def descomentar_csv(fuente):
     return "\n".join(salida) + "\n"
 
 
-def ejecutar(fuente, etiqueta, csv=False):
+def ejecutar(fuente, etiqueta, csv=False, preparar_red=None):
     estado = {"ciclo": 0, "ms": 0, "pines": {}, "log": []}
+    servicio_red = None
 
     # ---- escenario (depende del ciclo) ----
     def pir_nivel():
@@ -110,6 +111,8 @@ def ejecutar(fuente, etiqueta, csv=False):
             estado["pines"][13].handler(estado["pines"][13])
         if estado["ciclo"] == 10:
             estado["pines"][13].handler(estado["pines"][13])
+        if servicio_red is not None:
+            servicio_red.paso()
         if estado["ciclo"] >= CICLOS:
             raise FinPrueba()
 
@@ -124,6 +127,8 @@ def ejecutar(fuente, etiqueta, csv=False):
         for nombre in MODULOS:
             sys.modules.pop(nombre, None)
         sys.modules.update(machine=machine, time=reloj)
+        if preparar_red is not None:
+            servicio_red = preparar_red()
         if csv:
             modulo = types.ModuleType("historial")
             sys.modules["historial"] = modulo

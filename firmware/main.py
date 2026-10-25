@@ -8,6 +8,7 @@ import sensor_ldr
 import sensor_ultrasonico
 import actuador_leds
 import historial
+import red
 
 # main.py SOLO arma el ciclo principal: lee sensores y le pasa los valores al controlador.
 # Dónde vive cada cosa:
@@ -20,6 +21,8 @@ import historial
 #   controlador.py         -> ejecuta los eventos (procesar_presencia(), procesar_ldr())
 #   actuador_leds.py       -> 74HC595 (poner(bit, encendido), apagar_todos())
 #   historial.py           -> historial de eventos y CSV (registrar_evento())
+#   red.py                 -> cola de eventos y WiFi/MQTT en otro hilo
+#   mensajes.py            -> contrato JSON de eventos (usado por red.py)
 
 # ==================== INICIO ====================
 actuador_leds.apagar_todos()   # todos los LEDs apagados al iniciar
@@ -36,6 +39,7 @@ ultimo_debug = time.ticks_ms()
 # a que termine cualquier eco pendiente (el sensor necesita ~60 ms entre mediciones).
 sensor_ultrasonico.medir_cm()
 time.sleep_ms(60)
+red.iniciar()  # WiFi/MQTT en otro hilo; no espera la conexión para leer sensores
 
 # ==================== CICLO PRINCIPAL ====================
 while True:
@@ -44,6 +48,7 @@ while True:
     if hubo_irq:
         print("[SALA] Interrupcion de hardware del PIR (IRQ #{})".format(sensor_pir.contador()))
         historial.registrar_evento("SALA", "IRQ_PIR", sensor_pir.contador())
+        red.encolar("SALA", "IRQ_PIR", sensor_pir.contador(), zonas.sala["luz"])
     controlador.procesar_presencia(zonas.sala, hubo_irq or sensor_pir.hay_movimiento())
 
     # Habitación 1: HC-SR04
