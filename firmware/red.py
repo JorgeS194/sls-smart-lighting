@@ -27,9 +27,25 @@ class ServicioRed:
         self.inicio_wifi = 0
         self.ultimo_fallo = None
         self.ultimo_envio = time.ticks_ms()
+        self.ultima_muestra = self.ultimo_envio
+        self.instantanea = None
         base = "{}/{}".format(config.MQTT_PREFIJO, config.MQTT_DISPOSITIVO)
         self.topico_eventos = (base + "/eventos").encode()
         self.topico_latido = (base + "/conexion").encode()
+        self.topico_telemetria = "{}/{}/telemetria".format(
+            config.MQTT_PREFIJO_TELEMETRIA, config.MQTT_DISPOSITIVO).encode()
+
+    def muestrear(self, pir, ldr, distancia, sala, hab1, hab2):
+        ahora = time.ticks_ms()
+        if time.ticks_diff(ahora, self.ultima_muestra) < config.TELEMETRIA_INTERVALO_MS:
+            return
+        self.ultima_muestra = ahora
+        self.secuencia += 1
+        luces = {"SALA": sala, "HABITACION_1": hab1, "HABITACION_2": hab2}
+        dato = mensajes.telemetria(self.sesion, self.secuencia, pir, ldr, distancia, luces)
+        with self.candado:
+            # Durante una caída solo interesa conservar la lectura más reciente.
+            self.instantanea = dato
 
     def encolar(self, zona, evento, valor="", luz=None):
         # Solo el ciclo principal produce eventos. Serializar antes del candado.
@@ -88,8 +104,16 @@ class ServicioRed:
                 print("[RED] MQTT conectado: {}".format(self.topico_eventos.decode()))
                 self._latido()
             with self.candado:
+                instantanea = self.instantanea
                 pendiente = self.cola[0] if self.cola else None
-            if pendiente is not None:
+            if instantanea is not None:
+                self.cliente.sock.settimeout(config.RED_TIMEOUT_S)
+                self.cliente.publish(self.topico_telemetria, instantanea, qos=1, retain=False)
+                with self.candado:
+                    if self.instantanea is instantanea:
+                        self.instantanea = None
+                self.ultimo_envio = time.ticks_ms()
+            elif pendiente is not None:
                 self.cliente.sock.settimeout(config.RED_TIMEOUT_S)
                 self.cliente.publish(self.topico_eventos, pendiente[1], qos=1, retain=False)
                 # El productor pudo descartar este elemento mientras se enviaba.
@@ -125,7 +149,7 @@ def iniciar():
     global _servicio
     if not config.HABILITAR_RED or _servicio is not None:
         return
-    if not config.MQTT_SERVIDOR:
+    if not config.MQTT_SERVIDOR.strip():
         print("[RED] Configura MQTT_SERVIDOR; control local activo")
         return
     try:
@@ -151,3 +175,8 @@ def iniciar():
 def encolar(zona, evento, valor="", luz=None):
     if _servicio is not None:
         _servicio.encolar(zona, evento, valor, luz)
+
+
+def muestrear(pir, ldr, distancia, sala, hab1, hab2):
+    if _servicio is not None:
+        _servicio.muestrear(pir, ldr, distancia, sala, hab1, hab2)
