@@ -34,12 +34,15 @@ class Persistencia:
         return estado
 
     def guardar(self, estado, fila):
+        self.guardar_lote(estado, [fila])
+
+    def guardar_lote(self, estado, filas):
         nuevo = not self.csv.exists() or self.csv.stat().st_size == 0
         with self.csv.open("a", newline="", encoding="utf-8") as archivo:
             escritor = csv.DictWriter(archivo, fieldnames=CAMPOS)
             if nuevo:
                 escritor.writeheader()
-            escritor.writerow(fila)
+            escritor.writerows(filas)
             archivo.flush()
             os.fsync(archivo.fileno())
         self.snapshot(estado)
