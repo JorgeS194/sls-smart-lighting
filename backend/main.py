@@ -4,6 +4,7 @@ from copy import deepcopy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
+from mimetypes import guess_type
 import os
 from pathlib import Path
 import threading
@@ -15,6 +16,10 @@ from .procesamiento import procesar
 from .receptor import SENSORES, validar_comando, validar_instantanea, validar_mensaje
 
 LOG = logging.getLogger(__name__)
+DASHBOARD = Path(__file__).resolve().parent.parent / "dashboard"
+DASHBOARD_FILES = {"/": "index.html", **{
+    f"/{nombre}": nombre for nombre in ("app.mjs", "model.mjs", "styles.css", "icon.svg")
+}}
 
 
 class Servicio:
@@ -84,9 +89,19 @@ def crear_handler(servicio, origen):
         def do_GET(self):
             ruta = urlsplit(self.path)
             try:
+                if ruta.path in DASHBOARD_FILES:
+                    archivo = DASHBOARD / DASHBOARD_FILES[ruta.path]
+                    datos = archivo.read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", guess_type(archivo.name)[0])
+                    self.send_header("Content-Length", str(len(datos)))
+                    self.end_headers()
+                    self.wfile.write(datos)
+                    return
                 with servicio.lock:
                     if ruta.path == "/api/salud":
-                        datos = {"estado": "ok", "mqtt_conectado": servicio.conectado}
+                        datos = {"estado": "ok", "mqtt_conectado": servicio.conectado,
+                                 "mqtt_configurado": servicio.mqtt is not None}
                     elif ruta.path == "/api/estado":
                         datos = deepcopy(servicio.estado)
                     elif ruta.path == "/api/historial":
