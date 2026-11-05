@@ -74,6 +74,35 @@ class ContratoFirmwareTests(unittest.TestCase):
         estado = self.servicio.recibir(evento("HABITACION 2", "LDR", "LECTURA", 2000))
         self.assertEqual(estado["zonas"]["HABITACION_2"]["clasificacion"], "OSCURO")
 
+    def test_instantanea_mqtt_valida_y_reconstruye_csv(self):
+        prefijo = "utp/ds8/1gs133/sls-smart-lighting"
+        muestra = {"version": 2, "dispositivo": "casa-01", "sesion": "arranque",
+                   "secuencia": 1, "intervalo_ms": 2000,
+                   "lecturas": {"pir": 0, "ldr_adc": 2593, "distancia_cm": 60},
+                   "luces": {"SALA": False, "HABITACION_1": True, "HABITACION_2": True}}
+        topico = prefijo + "/casa-01/telemetria"
+        estado = self.servicio.recibir_mqtt(topico, muestra, prefijo)
+        self.assertEqual(estado["lecturas"], 3)
+        self.assertEqual(estado["zonas"]["HABITACION_1"]["valor"], 60)
+        muestra["lecturas"]["distancia_cm"] = None
+        muestra["luces"]["HABITACION_1"] = False
+        muestra["secuencia"] = 2
+        estado = self.servicio.recibir_mqtt(topico, muestra, prefijo)
+        self.assertEqual(estado["zonas"]["HABITACION_1"]["valor"], 60)
+        self.assertFalse(estado["zonas"]["HABITACION_1"]["luz"])
+        self.assertEqual(Servicio(self.tmp.name).estado, estado)
+
+    def test_instantanea_invalida_no_guarda_lecturas_parciales(self):
+        muestra = {"version": 2, "dispositivo": "casa-01", "sesion": "arranque",
+                   "secuencia": 1, "intervalo_ms": 2000,
+                   "lecturas": {"pir": 0, "ldr_adc": 4096},
+                   "luces": {"SALA": False, "HABITACION_1": False, "HABITACION_2": True}}
+        for topico in ("sls/casa-01/telemetria", "sls/otra-casa/telemetria", "sls/casa-01/estado"):
+            with self.subTest(topico=topico), self.assertRaises(ValueError):
+                self.servicio.recibir_mqtt(topico, muestra, "sls")
+        self.assertEqual(self.servicio.estado["lecturas"], 0)
+        self.assertFalse(self.servicio.persistencia.csv.exists())
+
     def test_rechaza_ausencia_de_lectura_y_contadores_invalidos(self):
         for dato in (evento(nombre="LECTURA"), evento(nombre="IRQ_PIR"),
                      evento(nombre="IRQ_PIR", valor=True), evento(nombre="IRQ_PIR", valor=0),

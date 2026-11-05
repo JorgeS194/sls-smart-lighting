@@ -11,13 +11,18 @@ SIN_LECTURA = {"PRESENCIA", "SIN_PRESENCIA", "LUZ_ENCENDIDA", "LUZ_APAGADA",
                "ENCENDER_LUZ", "APAGAR_LUZ"}
 
 
-def validar_mensaje(payload):
+def _objeto_json(payload):
     try:
         mensaje = json.loads(payload) if isinstance(payload, (str, bytes)) else payload
     except (ValueError, UnicodeError) as exc:
         raise ValueError("JSON inválido") from exc
     if not isinstance(mensaje, dict):
         raise ValueError("El mensaje debe ser un objeto JSON")
+    return mensaje
+
+
+def validar_mensaje(payload):
+    mensaje = _objeto_json(payload)
     zona = mensaje.get("zona")
     if not isinstance(zona, str):
         raise ValueError("Zona inválida")
@@ -55,6 +60,38 @@ def validar_mensaje(payload):
     if "luz" in mensaje:
         resultado["luz"] = mensaje["luz"]
     return resultado
+
+
+def validar_instantanea(payload, dispositivo):
+    mensaje = _objeto_json(payload)
+    if type(mensaje.get("version")) is not int or mensaje["version"] != 2:
+        raise ValueError("Se requiere telemetría v2")
+    if not dispositivo or mensaje.get("dispositivo") != dispositivo:
+        raise ValueError("El dispositivo no coincide con el tópico")
+    sesion = mensaje.get("sesion")
+    if not isinstance(sesion, str) or not sesion.strip():
+        raise ValueError("Sesión inválida")
+    for campo in ("secuencia", "intervalo_ms"):
+        valor = mensaje.get(campo)
+        if type(valor) is not int or valor <= 0:
+            raise ValueError("Campo inválido: " + campo)
+    lecturas, luces = mensaje.get("lecturas"), mensaje.get("luces")
+    if not isinstance(lecturas, dict) or not isinstance(luces, dict):
+        raise ValueError("Se requieren lecturas y luces")
+    if any(type(luces.get(zona)) is not bool for zona in SENSORES):
+        raise ValueError("Se requiere el estado booleano de las tres luces")
+    if any(type(lecturas.get(campo)) is not int for campo in ("pir", "ldr_adc")):
+        raise ValueError("PIR y LDR requieren lecturas enteras")
+    filas = []
+    for zona, campo in (("SALA", "pir"), ("HABITACION_1", "distancia_cm"),
+                        ("HABITACION_2", "ldr_adc")):
+        dato = dict(zona=zona, sensor=SENSORES[zona], valor=lecturas.get(campo),
+                    evento="LECTURA", luz=luces[zona])
+        if campo == "distancia_cm" and dato["valor"] is None:
+            # Registrar el estado observado sin sustituir la última distancia.
+            dato["evento"] = "LUZ_ENCENDIDA" if dato["luz"] else "LUZ_APAGADA"
+        filas.append(validar_mensaje(dato))
+    return filas
 
 
 def validar_comando(mensaje):
