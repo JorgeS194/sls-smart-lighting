@@ -128,3 +128,10 @@ Con el receptor en marcha, abre http://127.0.0.1:8000/ (o el puerto indicado
 con --puerto). El modo conectado muestra las lecturas, luces e historial
 del receptor. Para probar con Wokwi, usa el mismo broker y prefijo en ambos
 extremos e inicia la simulación. El modo demostración usa datos de ejemplo.
+
+En Windows, instala las dependencias con
+`python -m pip install -r backend/requirements.txt` y ejecuta
+`.\probar-dashboard.cmd` desde la raíz del repositorio. El lanzador usa
+EMQX para la telemetría simulada y abre el dashboard en
+http://127.0.0.1:8018/. Deja la terminal abierta durante la prueba y
+pulsa Ctrl+C para detener el receptor.
