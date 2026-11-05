@@ -121,3 +121,9 @@ python -m unittest backend.test_backend -v
 
 La prueba con broker real y ESP32 queda pendiente de la plataforma elegida
 y de la implementación MQTT del firmware.
+
+Para repetir la prueba con Wokwi en Windows, instala primero las dependencias
+con `python -m pip install -r backend/requirements.txt`. Con ese mismo Python
+activo en la terminal, ejecuta `.\probar-mqtt.cmd` desde la raíz. El lanzador
+usa el broker público de EMQX para datos simulados y la API local en el puerto
+8017. El CSV se escribe en `backend/datos/historial.csv` al recibir lecturas.
