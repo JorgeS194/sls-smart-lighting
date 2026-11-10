@@ -27,6 +27,7 @@ class ServicioRed:
         self.esperando_wifi = False
         self.inicio_wifi = 0
         self.ultimo_fallo = None
+        self.espera_reintento = 0
         self.ultimo_envio = time.ticks_ms()
         self.ultima_muestra = self.ultimo_envio
         self.instantanea = None
@@ -105,7 +106,7 @@ class ServicioRed:
         """Un intento del hilo; no se llama desde el ciclo de sensores."""
         ahora = time.ticks_ms()
         if self.ultimo_fallo is not None:
-            if time.ticks_diff(ahora, self.ultimo_fallo) < config.RED_REINTENTO_MS:
+            if time.ticks_diff(ahora, self.ultimo_fallo) < self.espera_reintento:
                 return
             self.ultimo_fallo = None
         try:
@@ -144,6 +145,7 @@ class ServicioRed:
                                      qos=1, retain=True)
                 print("[RED] MQTT conectado: {}".format(self.topico_eventos.decode()))
                 self._latido()
+                self.espera_reintento = 0
             if config.HABILITAR_ORDENES_MQTT:
                 self.cliente.check_msg()
             with self.candado:
@@ -172,7 +174,11 @@ class ServicioRed:
             self._cerrar()
             self.esperando_wifi = False
             self.ultimo_fallo = time.ticks_ms()
-            print("[RED] Sin conexion; se reintentara:", error)
+            self.espera_reintento = min(
+                config.RED_REINTENTO_MAX_MS,
+                max(config.RED_REINTENTO_MS, self.espera_reintento * 2),
+            )
+            print("[RED] Sin conexion; reintento en {} ms:".format(self.espera_reintento), error)
 
     def _latido(self):
         self.cliente.sock.settimeout(config.RED_TIMEOUT_S)

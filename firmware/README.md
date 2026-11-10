@@ -64,7 +64,7 @@ solo sería adecuado para una demostración autorizada con lecturas ficticias.
 - `main.py` inicia una sola tarea con `_thread`. Solo esa tarea toca WiFi/sockets;
   el ciclo principal encola los eventos después del control local. No se modifican
   los umbrales, la histéresis, los pines ni los temporizadores.
-- Se reintenta cada 5 segundos tras un fallo; WiFi tiene un plazo de 15 segundos.
+- Tras un fallo, los reintentos esperan 2, 4, 8, 16 y 32 segundos, y luego 60 segundos como máximo. Al recuperar MQTT, la espera vuelve a 2 segundos para la siguiente caída. Cada intento de WiFi tiene un plazo de 15 segundos.
   La cola conserva hasta 50 eventos. Si se llena, descarta el más viejo y cuenta
   los descartes. No persiste entre reinicios ni promete conservar toda una caída larga.
 - Se publica un evento por vuelta del hilo con QoS 1, sin retención. Solo se retira
