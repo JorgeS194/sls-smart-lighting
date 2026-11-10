@@ -27,6 +27,13 @@ def telemetria(sesion, secuencia, pir, ldr, distancia, luces):
     }).encode("utf-8")
 
 
+def estado(sesion, disponibilidad):
+    return json.dumps({
+        "version": 2, "dispositivo": config.MQTT_DISPOSITIVO,
+        "sesion": sesion, "estado": disponibilidad,
+    }).encode("utf-8")
+
+
 def latido(sesion, descartados, tiempo_ms):
     return json.dumps({
         "version": 1, "dispositivo": config.MQTT_DISPOSITIVO,
