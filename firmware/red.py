@@ -4,6 +4,7 @@ El hilo es el único dueño de WLAN y MQTT. El candado protege la cola y nunca
 se mantiene durante operaciones de red. QoS 1 puede entregar duplicados;
 (dispositivo, sesion, secuencia) permite identificarlos en el futuro backend.
 """
+import json
 import time
 import config
 import mensajes
@@ -34,6 +35,36 @@ class ServicioRed:
         self.topico_latido = (base + "/conexion").encode()
         self.topico_telemetria = "{}/{}/telemetria".format(
             config.MQTT_PREFIJO_TELEMETRIA, config.MQTT_DISPOSITIVO).encode()
+        self.topico_comandos = self.topico_telemetria.rsplit(b"/", 1)[0] + b"/comandos"
+        self.orden = None
+
+    def _recibir_orden(self, topico, payload):
+        if topico != self.topico_comandos:
+            return
+        try:
+            if len(payload) > 256:
+                raise ValueError("mensaje demasiado largo")
+            orden = json.loads(payload.decode())
+            if not isinstance(orden, dict):
+                raise ValueError("se esperaba un objeto JSON")
+            identificador = orden.get("id")
+            if not isinstance(identificador, str) or not identificador.strip():
+                raise ValueError("id inválido")
+            accion = orden.get("accion")
+            if orden.get("zona") != "SALA" or accion not in ("apagar", "auto"):
+                raise ValueError("zona o acción no admitida")
+        except (ValueError, UnicodeError) as error:
+            print("[RED] Orden rechazada:", error)
+            return
+        with self.candado:
+            # Las órdenes fijan el modo. Si coinciden, prevalece la última válida.
+            self.orden = accion
+
+    def tomar_orden(self):
+        with self.candado:
+            orden = self.orden
+            self.orden = None
+        return orden
 
     def muestrear(self, pir, ldr, distancia, sala, hab1, hab2):
         ahora = time.ticks_ms()
@@ -101,8 +132,13 @@ class ServicioRed:
                 except TypeError:
                     self.cliente.connect()
                 self.cliente.sock.settimeout(config.RED_TIMEOUT_S)
+                if config.HABILITAR_ORDENES_MQTT:
+                    self.cliente.set_callback(self._recibir_orden)
+                    self.cliente.subscribe(self.topico_comandos, qos=1)
                 print("[RED] MQTT conectado: {}".format(self.topico_eventos.decode()))
                 self._latido()
+            if config.HABILITAR_ORDENES_MQTT:
+                self.cliente.check_msg()
             with self.candado:
                 instantanea = self.instantanea
                 pendiente = self.cola[0] if self.cola else None
@@ -180,3 +216,8 @@ def encolar(zona, evento, valor="", luz=None):
 def muestrear(pir, ldr, distancia, sala, hab1, hab2):
     if _servicio is not None:
         _servicio.muestrear(pir, ldr, distancia, sala, hab1, hab2)
+
+
+def tomar_orden():
+    if _servicio is not None:
+        return _servicio.tomar_orden()

@@ -4,6 +4,7 @@ ENTORNO = "wokwi"   # "wokwi" o "real" (red.py carga secrets.py al iniciar)
 
 # ==================== COMUNICACIÓN (ETAPA 3) ====================
 HABILITAR_RED = ENTORNO == "wokwi"  # habilita MQTT en la simulación
+HABILITAR_ORDENES_MQTT = False  # activar solo en un broker controlado
 WIFI_SSID = "Wokwi-GUEST"
 WIFI_PASS = ""
 MQTT_SERVIDOR = "broker.emqx.io" if ENTORNO == "wokwi" else ""  # broker público de prueba

@@ -48,6 +48,7 @@ class BrokerFalso:
         self.falla_connect = False
         self.falla_publish = False
         self.durante_publish = None
+        self.entrantes = []
 
     def cliente(self, *args, **kwargs):
         broker = self
@@ -59,6 +60,17 @@ class BrokerFalso:
             def connect(self, **kwargs):
                 if broker.falla_connect:
                     raise OSError("broker no disponible")
+
+            def set_callback(self, callback):
+                self.callback = callback
+
+            def subscribe(self, topico, qos):
+                assert qos == 1
+                self.suscripcion = topico
+
+            def check_msg(self):
+                if broker.entrantes:
+                    self.callback(self.suscripcion, broker.entrantes.pop(0))
 
             def publish(self, topico, dato, qos, retain):
                 assert qos == 1 and retain is False
@@ -294,6 +306,45 @@ class PruebaRed(unittest.TestCase):
         self.assertEqual(mensaje["secuencia"], primera["secuencia"] + 1)
         self.assertIsNone(self.servicio.instantanea)
 
+    def test_orden_valida_invalida_y_reconexion(self):
+        self.config.HABILITAR_ORDENES_MQTT = True
+        self.broker.entrantes.extend([
+            b'{"id":"1","zona":"SALA","accion":"apagar"}',
+            b'{"id":"2","zona":"SALA","accion":"encender"}',
+            b'{"id":"3","zona":"SALA","accion":"auto"}',
+        ])
+        self.servicio.paso()
+        self.assertEqual(self.broker.clientes[0].suscripcion, self.servicio.topico_comandos)
+        self.servicio.paso()
+        self.assertEqual(self.servicio.tomar_orden(), "apagar")
+        self.assertIsNone(self.servicio.tomar_orden())
+        self.assertIn("Orden rechazada", sys.stdout.getvalue())
+        self.wifi.conectado = False
+        self.servicio.paso()
+        self.wifi.conectado = True
+        self.servicio.paso()
+        self.assertEqual(self.broker.clientes[1].suscripcion, self.servicio.topico_comandos)
+        self.assertEqual(self.servicio.tomar_orden(), "auto")
+
+    def test_orden_apagar_en_ciclo_principal(self):
+        fuente = (FIRMWARE / "main.py").read_text(encoding="utf-8")
+        broker = BrokerFalso()
+        broker.entrantes.append(b'{"id":"1","zona":"SALA","accion":"apagar"}')
+
+        def preparar():
+            import config
+            import red
+            config.HABILITAR_ORDENES_MQTT = True
+            red._servicio = red.ServicioRed(WiFiFalso(True), broker.cliente,
+                                           threading.Lock(), "integracion")
+            return red._servicio
+
+        salida, _ = ejecutar(fuente, "main.py", preparar_red=preparar)
+        self.assertIn("[SALA] Orden MQTT aplicada: apagar", salida)
+        self.assertIn("[SALA] Presencia detectada", salida)
+        self.assertNotIn("[SALA] Luz ENCENDIDA", salida)
+        self.assertIn("[HABITACION 1] Luz ENCENDIDA", salida)
+
     def test_main_sin_wifi_con_broker_caido_y_conectado(self):
         fuente = (FIRMWARE / "main.py").read_text(encoding="utf-8")
         base, ns_base = ejecutar(fuente, "main.py")
@@ -311,7 +362,7 @@ class PruebaRed(unittest.TestCase):
 
             salida, ns = ejecutar(fuente, "main.py", preparar_red=preparar)
             sin_red = "\n".join(l for l in salida.splitlines() if not l.startswith("[RED]"))
-            self.assertEqual(sin_red, base.rstrip("\n"))
+            self.assertEqual(sin_red, "\n".join(l for l in base.splitlines() if not l.startswith("[RED]")))
             self.assertEqual(ns["historial"].eventos(), esperados)
             self.assertEqual(ns["actuador_leds"]._estado, 0)
             if modo == "conectado":
