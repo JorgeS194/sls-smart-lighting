@@ -100,6 +100,7 @@ class PruebaRed(unittest.TestCase):
             sys.modules.pop(nombre, None)
         sys.modules["time"] = reloj
         self.config = importlib.import_module("config")
+        self.config.HABILITAR_ORDENES_MQTT = False
         self.red = importlib.import_module("red")
         self.wifi = WiFiFalso(True)
         self.broker = BrokerFalso()
@@ -111,7 +112,7 @@ class PruebaRed(unittest.TestCase):
         self.servicio.paso()
         dato = self.broker.enviados[-1][1]
         self.assertEqual(dato, {
-            "version": 1, "dispositivo": "casa-01", "sesion": "prueba",
+            "version": 1, "dispositivo": self.config.MQTT_DISPOSITIVO, "sesion": "prueba",
             "secuencia": 1, "tiempo_ms": 0, "zona": "HABITACION 1",
             "sensor": "HC-SR04", "evento": "PRESENCIA", "valor": 95, "luz": True})
         self.assertFalse(self.servicio.cola)

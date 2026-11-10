@@ -6,7 +6,7 @@ if not exist "%PUB%" (
     exit /b 1
 )
 set "TEMA=utp/ds8/1gs133/sls-smart-lighting/demo-sala-francesco/comandos"
-echo En Wokwi activa HABILITAR_ORDENES_MQTT y usa demo-sala-francesco como MQTT_DISPOSITIVO.
+echo Usa el firmware de esta rama en Wokwi con la configuracion incluida.
 echo Inicia la simulacion y espera la conexion MQTT.
 :menu
 echo.

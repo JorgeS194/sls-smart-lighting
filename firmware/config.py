@@ -4,13 +4,13 @@ ENTORNO = "wokwi"   # "wokwi" o "real" (red.py carga secrets.py al iniciar)
 
 # ==================== COMUNICACIÓN (ETAPA 3) ====================
 HABILITAR_RED = ENTORNO == "wokwi"  # habilita MQTT en la simulación
-HABILITAR_ORDENES_MQTT = False  # activar solo en un broker controlado
+HABILITAR_ORDENES_MQTT = ENTORNO == "wokwi"  # demo con datos simulados
 WIFI_SSID = "Wokwi-GUEST"
 WIFI_PASS = ""
 MQTT_SERVIDOR = "broker.emqx.io" if ENTORNO == "wokwi" else ""  # broker público de prueba
 MQTT_PUERTO = 1883
 MQTT_PREFIJO = "utp-sls/jorge-s194"
-MQTT_DISPOSITIVO = "casa-01"  # distinto para cada ESP32 simultáneo
+MQTT_DISPOSITIVO = "demo-sala-francesco" if ENTORNO == "wokwi" else "casa-01"
 MQTT_PREFIJO_TELEMETRIA = "utp/ds8/1gs133/sls-smart-lighting"
 TELEMETRIA_INTERVALO_MS = 2000
 MQTT_KEEPALIVE = 30
