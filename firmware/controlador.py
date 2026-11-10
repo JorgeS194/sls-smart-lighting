@@ -44,9 +44,9 @@ def aplicar_evento(zona, evento, dato=""):
     red.encolar(nombre, evento, dato, zona["luz"])
 
 
-def procesar_presencia(zona, hay_presencia, dato=""):
+def procesar_presencia(zona, hay_presencia, dato="", manual_apagado=False):
     """Sala y Habitación 1: logica.py decide, controlador.py ejecuta."""
-    for evento in logica.evaluar_zona_presencia(zona, hay_presencia, time.ticks_ms()):
+    for evento in logica.evaluar_zona_presencia(zona, hay_presencia, time.ticks_ms(), manual_apagado):
         aplicar_evento(zona, evento, dato)
 
 
