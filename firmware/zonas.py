@@ -1,7 +1,7 @@
 # zonas.py: el ESTADO de cada zona de la casa (qué está pasando en cada una ahora mismo).
 # Este archivo SOLO guarda datos: no lee sensores, no decide y no toca LEDs.
 #   - logica.py actualiza estos diccionarios (presencia, luz, oscuro, ultima).
-#   - main.py los pasa a logica.py y usa "bit" para encender/apagar el LED.
+#   - main.py los pasa a controlador.py, que aplica los eventos y usa "bit" para el LED.
 # Los diccionarios se comparten por referencia: todos los archivos ven los mismos
 # objetos, así que NUNCA hay que reasignarlos (zonas.sala = ...), solo modificar sus claves.
 

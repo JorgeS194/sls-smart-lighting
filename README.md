@@ -45,7 +45,7 @@ sls-smart-lighting/
 
 ### 1. Firmware en Wokwi
 1. Abre el proyecto: <https://wokwi.com/projects/476828453604708353>
-2. Reemplaza el contenido de `main.py` por el de [`firmware/main.py`](firmware/main.py).
+2. Copia todos los archivos `.py` de `firmware/` al proyecto, en un mismo nivel y conservando sus nombres. `main.py` importa los demás módulos; copiarlo solo no basta.
 3. Inicia la simulación y mueve el PIR, cambia la distancia del HC-SR04 o la luz del LDR. Verás los mensajes en la consola, por ejemplo `Interrupcion de hardware del PIR (IRQ #1)`.
 
 ### 2. Simulación de sensores en Python (Etapa 2)
@@ -61,6 +61,43 @@ Genera `estado.json` e `historial.csv` en la carpeta desde donde lo ejecutas (es
 ```bash
 python tests/prueba_main.py
 ```
+
+La prueba carga los módulos con hardware simulado y verifica las dos IRQ del PIR,
+los eventos de las tres zonas, el apagado de los LEDs y la equivalencia del CSV
+con el historial en RAM. Activa el CSV solo en una copia en memoria de
+`historial.py` y usa un directorio temporal. No sustituye la validación en Wokwi.
+
+### 4. Comunicación del firmware (Etapa 3)
+
+Ya existen `red.py` (WiFi/MQTT en otro hilo) y `mensajes.py` (JSON de eventos).
+La red viene desactivada y sin broker configurado: el control de luces funciona
+sin enviar datos. Configuración, dependencias y pasos de demostración en
+[`firmware/README.md`](firmware/README.md#wifi-mqtt-y-json-etapa-3).
+
+Pruebas de conexión, desconexión y reintentos sin usar internet:
+
+```bash
+python -m unittest discover -s tests -p prueba_red.py -v
+```
+
+La conexión externa desde Wokwi aún requiere validación. Los comandos remotos
+siguen pendientes.
+
+### 5. Dashboard del hogar
+
+```bash
+python backend/servidor.py
+```
+
+Abre **http://127.0.0.1:8000**. Incluye plano interactivo, estados de las tres zonas,
+lecturas, historial con filtros, exportación CSV e importación JSON del firmware.
+Empieza en una demostración identificada; «Ver datos reales» cambia a los eventos
+recibidos. Los controles manuales solo actúan en la demo.
+No conecta a servicios externos por defecto ni modifica el control del ESP32.
+
+Detalles en [`dashboard/README.md`](dashboard/README.md) y
+[`backend/README.md`](backend/README.md). Falta validar el recorrido MQTT completo
+con Wokwi y un broker real.
 
 ## Equipo y roles
 

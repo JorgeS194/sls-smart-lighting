@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "dispositivo": "ejemplo-sin-placa",
+  "sesion": "importacion-manual",
+  "secuencia": 1,
+  "tiempo_ms": 1000,
+  "zona": "HABITACION 1",
+  "sensor": "HC-SR04",
+  "evento": "PRESENCIA",
+  "valor": 60,
+  "luz": true
+}
