@@ -280,6 +280,20 @@ class PruebaRed(unittest.TestCase):
         self.assertEqual(len(iniciados), 1)
         self.assertIsNotNone(self.red._servicio)
 
+    def test_telemetria_conserva_solo_la_ultima_muestra(self):
+        self.ms = self.config.TELEMETRIA_INTERVALO_MS
+        self.servicio.muestrear(False, 400, 1, False, False, False)
+        primera = json.loads(self.servicio.instantanea)
+        self.assertIsNone(primera["lecturas"]["distancia_cm"])
+        self.ms += self.config.TELEMETRIA_INTERVALO_MS
+        self.servicio.muestrear(True, 400, 60, True, True, False)
+        self.servicio.paso()
+        topico, mensaje = self.broker.enviados[-1]
+        self.assertEqual(topico, self.servicio.topico_telemetria)
+        self.assertEqual(mensaje["lecturas"], {"pir": 1, "ldr_adc": 400, "distancia_cm": 60})
+        self.assertEqual(mensaje["secuencia"], primera["secuencia"] + 1)
+        self.assertIsNone(self.servicio.instantanea)
+
     def test_main_sin_wifi_con_broker_caido_y_conectado(self):
         fuente = (FIRMWARE / "main.py").read_text(encoding="utf-8")
         base, ns_base = ejecutar(fuente, "main.py")
@@ -301,7 +315,12 @@ class PruebaRed(unittest.TestCase):
             self.assertEqual(ns["historial"].eventos(), esperados)
             self.assertEqual(ns["actuador_leds"]._estado, 0)
             if modo == "conectado":
-                datos = [d for _, d in broker.enviados if d["evento"] != "LATIDO"]
+                datos = [d for _, d in broker.enviados if d.get("evento") not in (None, "LATIDO")]
+                muestras = [d for t, d in broker.enviados if t.endswith(b"/telemetria")]
+                self.assertEqual(len(muestras), 7)
+                self.assertTrue(all(m["version"] == 2 and m["intervalo_ms"] == 2000 for m in muestras))
+                self.assertTrue(all({"pir", "ldr_adc"} <= m["lecturas"].keys() for m in muestras))
+                self.assertEqual(muestras[-1]["luces"], {"SALA": False, "HABITACION_1": False, "HABITACION_2": False})
                 self.assertEqual(len(datos), 16)
                 self.assertEqual([d["evento"] for d in datos], [e[2] for e in esperados])
                 self.assertEqual([d["tiempo_ms"] for d in datos], [e[0] for e in esperados])
