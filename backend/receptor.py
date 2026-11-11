@@ -11,7 +11,7 @@ SIN_LECTURA = {"PRESENCIA", "SIN_PRESENCIA", "LUZ_ENCENDIDA", "LUZ_APAGADA",
                "ENCENDER_LUZ", "APAGAR_LUZ"}
 
 
-def _objeto_json(payload):
+def objeto_json(payload):
     try:
         mensaje = json.loads(payload) if isinstance(payload, (str, bytes)) else payload
     except (ValueError, UnicodeError) as exc:
@@ -22,7 +22,7 @@ def _objeto_json(payload):
 
 
 def validar_mensaje(payload):
-    mensaje = _objeto_json(payload)
+    mensaje = objeto_json(payload)
     zona = mensaje.get("zona")
     if not isinstance(zona, str):
         raise ValueError("Zona inválida")
@@ -63,7 +63,7 @@ def validar_mensaje(payload):
 
 
 def validar_instantanea(payload, dispositivo):
-    mensaje = _objeto_json(payload)
+    mensaje = objeto_json(payload)
     if type(mensaje.get("version")) is not int or mensaje["version"] != 2:
         raise ValueError("Se requiere telemetría v2")
     if not dispositivo or mensaje.get("dispositivo") != dispositivo:
@@ -92,6 +92,17 @@ def validar_instantanea(payload, dispositivo):
             dato["evento"] = "LUZ_ENCENDIDA" if dato["luz"] else "LUZ_APAGADA"
         filas.append(validar_mensaje(dato))
     return filas
+
+
+def validar_disponibilidad(payload, dispositivo):
+    mensaje = objeto_json(payload)
+    sesion, estado = mensaje.get("sesion"), mensaje.get("estado")
+    if (type(mensaje.get("version")) is not int or mensaje["version"] != 2
+            or not dispositivo or mensaje.get("dispositivo") != dispositivo
+            or not isinstance(sesion, str) or not sesion.strip()
+            or estado not in ("online", "offline")):
+        raise ValueError("Estado MQTT inválido")
+    return sesion, estado
 
 
 def validar_comando(mensaje):
