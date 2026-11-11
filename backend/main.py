@@ -10,19 +10,22 @@ import threading
 from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 
+from .monitor import Monitor
 from .persistencia import Persistencia
 from .procesamiento import procesar
-from .receptor import SENSORES, validar_comando, validar_instantanea, validar_mensaje
+from .receptor import (SENSORES, objeto_json, validar_comando, validar_disponibilidad,
+                       validar_instantanea, validar_mensaje)
 
 LOG = logging.getLogger(__name__)
 
 
 class Servicio:
-    def __init__(self, directorio):
+    def __init__(self, directorio, silencio_s=6):
         self.persistencia = Persistencia(directorio)
         self.estado = self.persistencia.cargar()
         self.persistencia.snapshot(self.estado)
         self.lock = threading.RLock()
+        self.monitor = Monitor(Path(directorio) / "eventos_comunicacion.csv", silencio_s)
         self.mqtt = None
         self.conectado = False
         self.topico_comandos = ""
@@ -34,9 +37,30 @@ class Servicio:
         if topico == prefijo + "/telemetria":
             return self.recibir(payload)
         partes = topico.split("/")
-        if partes[:-2] != prefijo.split("/") or partes[-1:] != ["telemetria"]:
-            raise ValueError("Tópico de telemetría inválido")
-        return self._guardar_lecturas(validar_instantanea(payload, partes[-2]))
+        if partes[:-2] != prefijo.split("/") or partes[-1] not in ("telemetria", "estado"):
+            raise ValueError("Tópico MQTT inválido")
+        dispositivo, tipo = partes[-2:]
+        with self.lock:
+            if tipo == "estado":
+                sesion, estado = validar_disponibilidad(payload, dispositivo)
+                self.monitor.disponibilidad(dispositivo, sesion, estado)
+                return
+            mensaje = objeto_json(payload)
+            filas = validar_instantanea(mensaje, dispositivo)
+            resultado = self._guardar_lecturas(filas)
+            self.monitor.telemetria(dispositivo, mensaje["sesion"], mensaje["intervalo_ms"])
+            return resultado
+
+    def cambiar_conexion(self, conectado):
+        with self.lock:
+            if conectado:
+                self.monitor.reiniciar_plazos()
+            self.conectado = conectado
+
+    def revisar_comunicacion(self):
+        with self.lock:
+            if self.conectado:
+                self.monitor.revisar()
 
     def _guardar_lecturas(self, mensajes):
         with self.lock:
@@ -133,6 +157,18 @@ def crear_handler(servicio, origen):
     return Handler
 
 
+class Servidor(ThreadingHTTPServer):
+    def __init__(self, direccion, handler, servicio):
+        self.servicio = servicio
+        super().__init__(direccion, handler)
+
+    def service_actions(self):
+        try:
+            self.servicio.revisar_comunicacion()
+        except OSError:
+            LOG.exception("No se pudo registrar el cambio de comunicación")
+
+
 def conectar_mqtt(servicio, args):
     import paho.mqtt.client as mqtt
 
@@ -146,15 +182,16 @@ def conectar_mqtt(servicio, args):
         cliente.tls_set()
 
     def conectado(client, userdata, flags, reason_code, properties):
-        servicio.conectado = reason_code == 0
+        servicio.cambiar_conexion(reason_code == 0)
         if servicio.conectado:
             client.subscribe(args.prefijo + "/telemetria", qos=1)
             client.subscribe(args.prefijo + "/+/telemetria", qos=1)
+            client.subscribe(args.prefijo + "/+/estado", qos=1)
         else:
             LOG.error("Broker rechazó conexión: %s", reason_code)
 
     def desconectado(client, userdata, flags, reason_code, properties):
-        servicio.conectado = False
+        servicio.cambiar_conexion(False)
 
     def mensaje(client, userdata, msg):
         try:
@@ -162,7 +199,7 @@ def conectar_mqtt(servicio, args):
                 raise ValueError("Mensaje demasiado grande")
             servicio.recibir_mqtt(msg.topic, msg.payload, args.prefijo)
         except (ValueError, OSError):
-            LOG.exception("Telemetría rechazada o no guardada")
+            LOG.exception("Mensaje MQTT rechazado o no guardado")
 
     cliente.on_connect = conectado
     cliente.on_disconnect = desconectado
@@ -183,11 +220,15 @@ def main():
     parser.add_argument("--puerto-mqtt", type=int, default=1883)
     parser.add_argument("--prefijo", default=os.getenv("SLS_MQTT_PREFIJO", "utp-sls-g1"))
     parser.add_argument("--tls", action="store_true")
+    parser.add_argument("--silencio-s", type=int, default=6,
+                        help="Segundos sin telemetría, mínimo 6 y tres intervalos del dispositivo")
     parser.add_argument("--origen", default="http://localhost:5173")
     args = parser.parse_args()
+    if args.silencio_s < 6:
+        parser.error("--silencio-s debe ser de al menos 6 segundos")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    servicio = Servicio(args.datos)
-    servidor = ThreadingHTTPServer((args.host, args.puerto), crear_handler(servicio, args.origen))
+    servicio = Servicio(args.datos, args.silencio_s)
+    servidor = Servidor((args.host, args.puerto), crear_handler(servicio, args.origen), servicio)
     cliente = None
     try:
         if not args.sin_mqtt:
