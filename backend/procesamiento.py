@@ -1,7 +1,9 @@
 """Estado observado: el firmware conserva el control y sus temporizadores."""
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from .receptor import SENSORES
+
+HORA_PANAMA = timezone(timedelta(hours=-5))
 
 
 def estado_inicial():
@@ -13,7 +15,7 @@ def estado_inicial():
 
 def procesar(estado, mensaje):
     nuevo = deepcopy(estado)
-    fecha = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    fecha = datetime.now(HORA_PANAMA).isoformat(timespec="milliseconds")
     zona = nuevo["zonas"][mensaje["zona"]]
     sensor, valor = mensaje["sensor"], mensaje["valor"]
     # Un evento sin lectura y un contador IRQ no sustituyen el último dato ADC/cm/nivel.
