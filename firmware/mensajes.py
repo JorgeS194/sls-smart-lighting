@@ -15,6 +15,18 @@ def evento(zona, nombre, valor, luz, secuencia, sesion, tiempo_ms):
     }).encode("utf-8")
 
 
+def telemetria(sesion, secuencia, pir, ldr, distancia, luces):
+    if distancia is not None and not 2 <= distancia <= 400:
+        distancia = None
+    return json.dumps({
+        "version": 2, "dispositivo": config.MQTT_DISPOSITIVO,
+        "sesion": sesion, "secuencia": secuencia,
+        "intervalo_ms": config.TELEMETRIA_INTERVALO_MS,
+        "lecturas": {"pir": int(pir), "ldr_adc": ldr, "distancia_cm": distancia},
+        "luces": luces,
+    }).encode("utf-8")
+
+
 def latido(sesion, descartados, tiempo_ms):
     return json.dumps({
         "version": 1, "dispositivo": config.MQTT_DISPOSITIVO,

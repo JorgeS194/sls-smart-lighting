@@ -49,7 +49,8 @@ while True:
         print("[SALA] Interrupcion de hardware del PIR (IRQ #{})".format(sensor_pir.contador()))
         historial.registrar_evento("SALA", "IRQ_PIR", sensor_pir.contador())
         red.encolar("SALA", "IRQ_PIR", sensor_pir.contador(), zonas.sala["luz"])
-    controlador.procesar_presencia(zonas.sala, hubo_irq or sensor_pir.hay_movimiento())
+    pir = sensor_pir.hay_movimiento()
+    controlador.procesar_presencia(zonas.sala, hubo_irq or pir)
 
     # Habitación 1: HC-SR04
     distancia = sensor_ultrasonico.medir_cm()
@@ -59,6 +60,8 @@ while True:
     # Habitación 2: LDR
     valor_ldr = sensor_ldr.leer()
     controlador.procesar_ldr(zonas.hab2, valor_ldr)
+    red.muestrear(pir, valor_ldr, distancia, zonas.sala["luz"],
+                  zonas.hab1["luz"], zonas.hab2["luz"])
 
     # Ayuda de calibración (opcional)
     if config.DEPURAR_LDR and time.ticks_diff(time.ticks_ms(), ultimo_debug) >= 1000:
