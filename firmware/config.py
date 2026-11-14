@@ -1,6 +1,21 @@
 # config.py: todo lo que se puede ajustar vive aquí.
 
-ENTORNO = "wokwi"   # "wokwi" o "real" (por ahora no cambia nada; se usará en la Etapa 3)
+ENTORNO = "wokwi"   # "wokwi" o "real" (red.py carga secrets.py al iniciar)
+
+# ==================== COMUNICACIÓN (ETAPA 3) ====================
+HABILITAR_RED = False  # activar solo después de elegir/configurar el broker
+WIFI_SSID = "Wokwi-GUEST"
+WIFI_PASS = ""
+MQTT_SERVIDOR = ""  # configurar el broker elegido antes de activar la comunicación
+MQTT_PUERTO = 1883
+MQTT_PREFIJO = "utp-sls/jorge-s194"
+MQTT_DISPOSITIVO = "casa-01"  # distinto para cada ESP32 simultáneo
+MQTT_KEEPALIVE = 30
+RED_TIMEOUT_S = 3
+RED_REINTENTO_MS = 5000
+RED_WIFI_TIMEOUT_MS = 15000
+RED_LATIDO_MS = 10000
+RED_MAX_PENDIENTES = 50
 
 # ==================== CONFIGURACIÓN (puedes modificarla) ====================
 TIEMPO_APAGADO = 5          # segundos que la luz sigue encendida tras perder la presencia (Sala y Habitación 1)
