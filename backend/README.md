@@ -135,3 +135,18 @@ En Windows, instala las dependencias con
 EMQX para la telemetría simulada y abre el dashboard en
 http://127.0.0.1:8018/. Deja la terminal abierta durante la prueba y
 pulsa Ctrl+C para detener el receptor.
+
+## Monitor de comunicación MQTT
+
+El receptor escucha `<prefijo>/+/estado` además de la telemetría. Registra
+`ONLINE` al recibir una instantánea válida, `SIN_DATOS` si el dispositivo
+sigue anunciado como conectado y supera el tiempo de silencio, y `OFFLINE`
+al recibir el estado offline del broker. La pérdida de conexión del propio
+receptor suspende la comprobación del silencio hasta que vuelva a conectarse.
+
+Usa `--silencio-s` para ajustar el tiempo de silencio. El valor por defecto
+es 6 segundos. Para cada dispositivo se aplica como mínimo el triple de su
+intervalo de publicación anunciado. El archivo `eventos_comunicacion.csv`,
+en el directorio indicado por `--datos`, contiene fecha UTC, tipo, gravedad
+y detalle con dispositivo y sesión. Cada proceso registra la primera
+observación de estado y luego solo sus cambios.
