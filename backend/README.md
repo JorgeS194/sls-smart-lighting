@@ -123,17 +123,21 @@ en ambos extremos.
 
 ## Dashboard local
 
-Con el receptor en marcha, abre http://127.0.0.1:8000/ (o el puerto indicado
-con --puerto). El modo conectado muestra las lecturas, luces e historial
-del receptor. Para probar con Wokwi, usa el mismo broker y prefijo en ambos
-extremos e inicia la simulación. El modo demostración usa datos de ejemplo.
+Con el receptor en marcha, abre `http://127.0.0.1:8000/` o el puerto indicado
+con `--puerto`. El modo conectado muestra las lecturas, las luces y el historial
+del receptor. El modo demostración usa datos de ejemplo. Para probar con Wokwi,
+usa el mismo broker y prefijo en ambos extremos e inicia la simulación.
 
-En Windows, instala las dependencias con
-`python -m pip install -r backend/requirements.txt` y ejecuta
-`.\probar-dashboard.cmd` desde la raíz del repositorio. El lanzador usa
-EMQX para la telemetría simulada y abre el dashboard en
-http://127.0.0.1:8018/. Deja la terminal abierta durante la prueba y
-pulsa Ctrl+C para detener el receptor.
+En Windows, instala las dependencias desde la raíz con
+`python -m pip install -r backend/requirements.txt`. En esa misma terminal,
+ejecuta uno de estos lanzadores:
+
+| Lanzador | Uso |
+|---|---|
+| `.\probar-dashboard.cmd` | Abre el dashboard en `http://127.0.0.1:8018/` con telemetría simulada de EMQX. |
+| `.\probar-mqtt.cmd` | Inicia el receptor con el broker público de EMQX para datos simulados y la API local en `http://127.0.0.1:8017/`. Al recibir lecturas, las guarda en `backend/datos/historial.csv`. |
+
+Deja la terminal abierta durante la prueba. Pulsa Ctrl+C para detener el receptor.
 
 ## Monitor de comunicación MQTT
 
@@ -152,9 +156,3 @@ indicado por `--datos`:
   (`+00:00`), tipo, gravedad y detalle con dispositivo y sesión. Cada proceso
   registra la primera observación de estado y luego solo sus cambios.
 - `historial.csv` registra las lecturas con hora de Panamá (`-05:00`).
-
-Para repetir la prueba con Wokwi en Windows, instala primero las dependencias
-con `python -m pip install -r backend/requirements.txt`. Con ese mismo Python
-activo en la terminal, ejecuta `.\probar-mqtt.cmd` desde la raíz. El lanzador
-usa el broker público de EMQX para datos simulados y la API local en el puerto
-8017. El CSV se escribe en `backend/datos/historial.csv` al recibir lecturas.
