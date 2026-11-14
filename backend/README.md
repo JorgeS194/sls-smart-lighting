@@ -121,3 +121,10 @@ python -m unittest backend.test_backend -v
 
 La prueba con broker real y ESP32 queda pendiente de la plataforma elegida
 y de la implementación MQTT del firmware.
+
+## Dashboard local
+
+Con el receptor en marcha, abre http://127.0.0.1:8000/ (o el puerto indicado
+con --puerto). El modo conectado muestra las lecturas, luces e historial
+del receptor. Para probar con Wokwi, usa el mismo broker y prefijo en ambos
+extremos e inicia la simulación. El modo demostración usa datos de ejemplo.
