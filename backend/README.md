@@ -79,9 +79,17 @@ instalación durante la demostración.
 No se desplegó infraestructura en la nube.
 
 - ESP32 publica en utp-sls-g1/telemetria.
-- ESP32 se suscribe a utp-sls-g1/comandos.
+- Sin dispositivo configurado, el backend publica en `<prefijo>/comandos`.
+- Con `--dispositivo-comandos ID`, publica en `<prefijo>/ID/comandos`.
 - Backend recibe y publica con QoS 1. Comandos sin retain.
 - Reconexión con esperas entre 1 y 30 segundos.
+
+Para enviar órdenes desde la API al ESP32 de la demo de Wokwi, inicia
+el backend con su identificador de dispositivo:
+
+```powershell
+python -m backend.main --broker broker.emqx.io --prefijo utp/ds8/1gs133/sls-smart-lighting --dispositivo-comandos demo-sala-francesco
+```
 
 Telemetría mínima:
 

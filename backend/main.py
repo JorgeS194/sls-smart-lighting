@@ -189,7 +189,8 @@ def conectar_mqtt(servicio, args):
 
     cliente = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="sls-backend-" + uuid4().hex[:12])
     servicio.mqtt = cliente
-    servicio.topico_comandos = args.prefijo + "/comandos"
+    destino = f"/{args.dispositivo_comandos}" if args.dispositivo_comandos else ""
+    servicio.topico_comandos = f"{args.prefijo}{destino}/comandos"
     usuario = os.getenv("SLS_MQTT_USUARIO")
     if usuario:
         cliente.username_pw_set(usuario, os.getenv("SLS_MQTT_PASSWORD"))
@@ -234,11 +235,17 @@ def main():
     parser.add_argument("--broker", default=os.getenv("SLS_MQTT_HOST", "localhost"))
     parser.add_argument("--puerto-mqtt", type=int, default=1883)
     parser.add_argument("--prefijo", default=os.getenv("SLS_MQTT_PREFIJO", "utp-sls-g1"))
+    parser.add_argument("--dispositivo-comandos",
+                        help="Identificador del ESP32 destino de las órdenes MQTT")
     parser.add_argument("--tls", action="store_true")
     parser.add_argument("--silencio-s", type=int, default=6,
                         help="Segundos sin telemetría, mínimo 6 y tres intervalos del dispositivo")
     parser.add_argument("--origen", default="http://localhost:5173")
     args = parser.parse_args()
+    dispositivo = args.dispositivo_comandos
+    if dispositivo is not None and (not dispositivo or any(
+            caracter.isspace() or caracter in "/+#\0" for caracter in dispositivo)):
+        parser.error("--dispositivo-comandos debe ser un segmento MQTT válido")
     if args.silencio_s < 6:
         parser.error("--silencio-s debe ser de al menos 6 segundos")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
