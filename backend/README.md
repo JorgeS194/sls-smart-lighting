@@ -152,3 +152,9 @@ indicado por `--datos`:
   (`+00:00`), tipo, gravedad y detalle con dispositivo y sesión. Cada proceso
   registra la primera observación de estado y luego solo sus cambios.
 - `historial.csv` registra las lecturas con hora de Panamá (`-05:00`).
+
+Para repetir la prueba con Wokwi en Windows, instala primero las dependencias
+con `python -m pip install -r backend/requirements.txt`. Con ese mismo Python
+activo en la terminal, ejecuta `.\probar-mqtt.cmd` desde la raíz. El lanzador
+usa el broker público de EMQX para datos simulados y la API local en el puerto
+8017. El CSV se escribe en `backend/datos/historial.csv` al recibir lecturas.
