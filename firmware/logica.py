@@ -30,7 +30,7 @@ def esta_oscuro(valor, estaba_oscuro):
 # Cada función actualiza el estado de la zona (el diccionario "zona") y devuelve
 # una lista con los EVENTOS que ocurrieron en esta vuelta (puede estar vacía).
 
-def evaluar_zona_presencia(zona, hay_presencia, ahora):
+def evaluar_zona_presencia(zona, hay_presencia, ahora, manual_apagado=False):
     """Sala y Habitación 1: enciende con presencia y apaga tras TIEMPO_APAGADO.
     Eventos posibles: PRESENCIA, SIN_PRESENCIA, LUZ_ENCENDIDA, LUZ_APAGADA."""
     eventos = []
@@ -41,6 +41,12 @@ def evaluar_zona_presencia(zona, hay_presencia, ahora):
     elif not hay_presencia and zona["presencia"]:
         eventos.append("SIN_PRESENCIA")
     zona["presencia"] = hay_presencia
+
+    if manual_apagado:
+        if zona["luz"]:
+            zona["luz"] = False
+            eventos.append("LUZ_APAGADA")
+        return eventos
 
     if hay_presencia:
         zona["ultima"] = ahora   # reinicia el contador de apagado
