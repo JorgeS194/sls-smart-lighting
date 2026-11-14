@@ -45,6 +45,7 @@ class BrokerFalso:
     def __init__(self):
         self.clientes = []
         self.enviados = []
+        self.estados = []
         self.falla_connect = False
         self.falla_publish = False
         self.durante_publish = None
@@ -61,6 +62,9 @@ class BrokerFalso:
                 if broker.falla_connect:
                     raise OSError("broker no disponible")
 
+            def set_last_will(self, topico, dato, retain, qos):
+                self.testamento = (topico, json.loads(dato), retain, qos)
+
             def set_callback(self, callback):
                 self.callback = callback
 
@@ -73,9 +77,12 @@ class BrokerFalso:
                     self.callback(self.suscripcion, broker.entrantes.pop(0))
 
             def publish(self, topico, dato, qos, retain):
-                assert qos == 1 and retain is False
+                assert qos == 1
                 if broker.falla_publish:
                     raise OSError("publicacion sin confirmacion")
+                if retain:
+                    broker.estados.append((topico, json.loads(dato), retain, qos))
+                    return
                 if broker.durante_publish is not None:
                     broker.durante_publish(topico)
                 broker.enviados.append((topico, json.loads(dato)))
@@ -106,6 +113,20 @@ class PruebaRed(unittest.TestCase):
         self.broker = BrokerFalso()
         self.servicio = self.red.ServicioRed(self.wifi, self.broker.cliente,
                                             threading.Lock(), "prueba")
+
+    def test_estado_retenido_y_testamento_al_reconectar(self):
+        topico = self.servicio.topico_telemetria.rsplit(b"/", 1)[0] + b"/estado"
+        estado = {"version": 2, "dispositivo": self.config.MQTT_DISPOSITIVO,
+                  "sesion": "prueba"}
+        self.servicio.paso()
+        self.wifi.conectado = False
+        self.servicio.paso()
+        self.wifi.conectado = True
+        self.servicio.paso()
+        self.assertEqual([cliente.testamento for cliente in self.broker.clientes],
+                         [(topico, dict(estado, estado="offline"), True, 1)] * 2)
+        self.assertEqual(self.broker.estados,
+                         [(topico, dict(estado, estado="online"), True, 1)] * 2)
 
     def test_json_tipos_y_sesion(self):
         self.servicio.encolar("HABITACION 1", "PRESENCIA", 95, True)

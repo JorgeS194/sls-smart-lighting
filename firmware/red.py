@@ -36,6 +36,7 @@ class ServicioRed:
         self.topico_telemetria = "{}/{}/telemetria".format(
             config.MQTT_PREFIJO_TELEMETRIA, config.MQTT_DISPOSITIVO).encode()
         self.topico_comandos = self.topico_telemetria.rsplit(b"/", 1)[0] + b"/comandos"
+        self.topico_estado = self.topico_telemetria.rsplit(b"/", 1)[0] + b"/estado"
         self.orden = None
 
     def _recibir_orden(self, topico, payload):
@@ -126,6 +127,9 @@ class ServicioRed:
                 self.cliente = self.cliente_mqtt(
                     identificador.encode(), config.MQTT_SERVIDOR,
                     port=config.MQTT_PUERTO, keepalive=config.MQTT_KEEPALIVE)
+                self.cliente.set_last_will(self.topico_estado,
+                                           mensajes.estado(self.sesion, "offline"),
+                                           retain=True, qos=1)
                 # umqtt.simple reciente admite timeout; Wokwi puede traer la antigua.
                 try:
                     self.cliente.connect(timeout=config.RED_TIMEOUT_S)
@@ -135,6 +139,9 @@ class ServicioRed:
                 if config.HABILITAR_ORDENES_MQTT:
                     self.cliente.set_callback(self._recibir_orden)
                     self.cliente.subscribe(self.topico_comandos, qos=1)
+                self.cliente.publish(self.topico_estado,
+                                     mensajes.estado(self.sesion, "online"),
+                                     qos=1, retain=True)
                 print("[RED] MQTT conectado: {}".format(self.topico_eventos.decode()))
                 self._latido()
             if config.HABILITAR_ORDENES_MQTT:
