@@ -42,6 +42,7 @@ time.sleep_ms(60)
 red.iniciar()  # WiFi/MQTT en otro hilo; no espera la conexión para leer sensores
 
 # ==================== CICLO PRINCIPAL ====================
+sala_manual = False
 while True:
     # Sala: PIR (por interrupción de hardware + lectura del nivel)
     hubo_irq = sensor_pir.hubo_interrupcion()   # True una sola vez por interrupción
@@ -50,7 +51,11 @@ while True:
         historial.registrar_evento("SALA", "IRQ_PIR", sensor_pir.contador())
         red.encolar("SALA", "IRQ_PIR", sensor_pir.contador(), zonas.sala["luz"])
     pir = sensor_pir.hay_movimiento()
-    controlador.procesar_presencia(zonas.sala, hubo_irq or pir)
+    orden = red.tomar_orden()
+    if orden is not None:
+        sala_manual = orden == "apagar"
+        print("[SALA] Orden MQTT aplicada:", orden)
+    controlador.procesar_presencia(zonas.sala, hubo_irq or pir, manual_apagado=sala_manual)
 
     # Habitación 1: HC-SR04
     distancia = sensor_ultrasonico.medir_cm()
