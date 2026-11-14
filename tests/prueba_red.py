@@ -167,6 +167,28 @@ class PruebaRed(unittest.TestCase):
         self.servicio.paso()
         self.assertEqual(self.broker.enviados[-1][1]["evento"], "IRQ_PIR")
 
+    def test_reintento_crece_hasta_el_tope_y_se_reinicia(self):
+        self.broker.falla_connect = True
+        self.servicio.paso()
+        for espera in (2000, 4000, 8000, 16000, 32000, 60000, 60000):
+            self.assertEqual(self.servicio.espera_reintento, espera)
+            intentos = len(self.broker.clientes)
+            self.ms += espera - 1
+            self.servicio.paso()
+            self.assertEqual(len(self.broker.clientes), intentos)
+            self.ms += 1
+            self.servicio.paso()
+            self.assertEqual(len(self.broker.clientes), intentos + 1)
+
+        self.broker.falla_connect = False
+        self.ms += 60000
+        self.servicio.paso()
+        self.assertEqual(self.broker.estados[-1][1]["estado"], "online")
+        self.broker.falla_publish = True
+        self.servicio.encolar("SALA", "PRESENCIA")
+        self.servicio.paso()
+        self.assertEqual(self.servicio.espera_reintento, 2000)
+
     def test_publicacion_fallida_se_reenvia_en_orden(self):
         self.servicio.paso()
         self.broker.falla_publish = True
