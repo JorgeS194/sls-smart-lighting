@@ -23,10 +23,12 @@ class Persistencia:
             with self.csv.open(newline="", encoding="utf-8") as archivo:
                 for fila in csv.DictReader(archivo):
                     zona = estado["zonas"][fila["zona"]]
-                    zona.update(sensor=fila["sensor"], valor=float(fila["valor"]),
-                                clasificacion=fila["clasificacion"],
+                    zona.update(sensor=fila["sensor"],
+                                clasificacion=fila["clasificacion"] or None,
                                 luz={"True": True, "False": False, "": None}[fila["luz"]],
                                 ultima_actualizacion=fila["fecha_hora"])
+                    if fila["valor"] != "" and fila["evento"] != "IRQ_PIR":
+                        zona["valor"] = float(fila["valor"])
                     estado["lecturas"] += 1
                     estado["ultima_actualizacion"] = fila["fecha_hora"]
         return estado
@@ -55,7 +57,7 @@ class Persistencia:
                            if zona is None or fila["zona"] == zona), maxlen=limite)
         resultado = []
         for fila in reversed(filas):
-            fila["valor"] = float(fila["valor"])
+            fila["valor"] = float(fila["valor"]) if fila["valor"] != "" else None
             fila["luz"] = {"True": True, "False": False, "": None}[fila["luz"]]
             resultado.append(fila)
         return resultado

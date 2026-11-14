@@ -16,14 +16,22 @@ def procesar(estado, mensaje):
     fecha = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
     zona = nuevo["zonas"][mensaje["zona"]]
     sensor, valor = mensaje["sensor"], mensaje["valor"]
-    if sensor == "PIR":
+    # Un evento sin lectura y un contador IRQ no sustituyen el último dato ADC/cm/nivel.
+    clase = zona["clasificacion"]
+    tiene_lectura = valor is not None and mensaje["evento"] != "IRQ_PIR"
+    if not tiene_lectura:
+        if sensor in ("PIR", "HC-SR04") and mensaje["evento"] in ("PRESENCIA", "SIN_PRESENCIA"):
+            clase = mensaje["evento"]
+    elif sensor == "PIR":
         clase = "PRESENCIA" if valor else "SIN_PRESENCIA"
     elif sensor == "HC-SR04":
         clase = "MUY_CERCA" if valor < 30 else "PRESENCIA" if valor < 100 else "SIN_PRESENCIA"
     else:
         limite = 1850 if zona["clasificacion"] == "OSCURO" else 2150
         clase = "OSCURO" if valor > limite else "CLARO"
-    zona.update(valor=valor, clasificacion=clase, ultima_actualizacion=fecha)
+    zona.update(clasificacion=clase, ultima_actualizacion=fecha)
+    if tiene_lectura:
+        zona["valor"] = valor
     if "luz" in mensaje:
         zona["luz"] = mensaje["luz"]
     elif mensaje["evento"] in ("LUZ_ENCENDIDA", "ENCENDER_LUZ"):
