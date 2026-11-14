@@ -1,4 +1,5 @@
 import json
+import sys
 import tempfile
 import threading
 import unittest
@@ -6,7 +7,9 @@ from pathlib import Path
 from http.server import ThreadingHTTPServer
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
-from .main import Servicio, crear_handler
+from types import ModuleType, SimpleNamespace
+from unittest.mock import MagicMock, patch
+from .main import Servicio, conectar_mqtt, crear_handler
 from .receptor import validar_mensaje
 
 
@@ -46,6 +49,30 @@ class BackendTests(unittest.TestCase):
         with self.assertRaises(ConnectionError):
             self.servicio.comando({'zona': 'SALA', 'accion': 'apagar'})
         self.assertIsNone(self.servicio.estado['zonas']['SALA']['luz'])
+
+    def comprobar_topico_comandos(self, dispositivo, topico_esperado):
+        paho = ModuleType("paho")
+        paho.mqtt = ModuleType("paho.mqtt")
+        paho.mqtt.client = MagicMock()
+        modulos = {"paho": paho, "paho.mqtt": paho.mqtt, "paho.mqtt.client": paho.mqtt.client}
+        args = SimpleNamespace(prefijo="utp/ds8/1gs133/sls-smart-lighting",
+                               dispositivo_comandos=dispositivo, tls=False,
+                               broker="localhost", puerto_mqtt=1883)
+        with patch.dict(sys.modules, modulos):
+            cliente = conectar_mqtt(self.servicio, args)
+        cliente.publish.return_value.rc = 0
+        self.servicio.cambiar_conexion(True)
+        self.servicio.comando({"zona": "SALA", "accion": "apagar"})
+        cliente.publish.assert_called_once()
+        self.assertEqual(cliente.publish.call_args.args[0], topico_esperado)
+
+    def test_comando_publica_en_topico_legado(self):
+        self.comprobar_topico_comandos(None, "utp/ds8/1gs133/sls-smart-lighting/comandos")
+
+    def test_comando_publica_en_topico_del_dispositivo(self):
+        self.comprobar_topico_comandos(
+            "demo-sala-francesco", "utp/ds8/1gs133/sls-smart-lighting/demo-sala-francesco/comandos"
+        )
 
     def test_api(self):
         servidor = ThreadingHTTPServer(('127.0.0.1', 0), crear_handler(self.servicio, 'http://localhost:5173'))
