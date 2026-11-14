@@ -296,7 +296,11 @@ class PruebaRed(unittest.TestCase):
 
     def test_main_sin_wifi_con_broker_caido_y_conectado(self):
         fuente = (FIRMWARE / "main.py").read_text(encoding="utf-8")
-        base, ns_base = ejecutar(fuente, "main.py")
+        def preparar_sin_red():
+            import config
+            config.HABILITAR_RED = False
+
+        base, ns_base = ejecutar(fuente, "main.py", preparar_red=preparar_sin_red)
         esperados = ns_base["historial"].eventos()
         for modo in ("sin_wifi", "broker_caido", "conectado"):
             broker = BrokerFalso()
