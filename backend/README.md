@@ -69,6 +69,13 @@ python -m backend.main --broker localhost --prefijo utp-sls-g1
 ```
 
 El equipo debe elegir broker y usar el mismo prefijo en el ESP32.
+Para las instantáneas v2 del firmware, configurar
+`--prefijo utp/ds8/1gs133/sls-smart-lighting` si se usa el grupo de ejemplo.
+El receptor escucha `<prefijo>/+/telemetria` y conserva el tópico legado
+`<prefijo>/telemetria`. Valida todo el mensaje v2 antes de guardar sus filas
+en CSV. Si falta el eco, actualiza la luz de Habitación 1 y conserva la
+última distancia. La API representa una sola casa. Usar un prefijo por
+instalación durante la demostración.
 No se desplegó infraestructura en la nube.
 
 - ESP32 publica en utp-sls-g1/telemetria.

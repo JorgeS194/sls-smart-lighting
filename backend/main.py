@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from .persistencia import Persistencia
 from .procesamiento import procesar
-from .receptor import SENSORES, validar_comando, validar_mensaje
+from .receptor import SENSORES, validar_comando, validar_instantanea, validar_mensaje
 
 LOG = logging.getLogger(__name__)
 
@@ -28,11 +28,25 @@ class Servicio:
         self.topico_comandos = ""
 
     def recibir(self, payload):
-        mensaje = validar_mensaje(payload)
+        return self._guardar_lecturas([validar_mensaje(payload)])
+
+    def recibir_mqtt(self, topico, payload, prefijo):
+        if topico == prefijo + "/telemetria":
+            return self.recibir(payload)
+        partes = topico.split("/")
+        if partes[:-2] != prefijo.split("/") or partes[-1:] != ["telemetria"]:
+            raise ValueError("Tópico de telemetría inválido")
+        return self._guardar_lecturas(validar_instantanea(payload, partes[-2]))
+
+    def _guardar_lecturas(self, mensajes):
         with self.lock:
-            nuevo, fila = procesar(self.estado, mensaje)
+            nuevo = self.estado
+            filas = []
+            for mensaje in mensajes:
+                nuevo, fila = procesar(nuevo, mensaje)
+                filas.append(fila)
             try:
-                self.persistencia.guardar(nuevo, fila)
+                self.persistencia.guardar_lote(nuevo, filas)
             except OSError:
                 # Reflejar cualquier fila ya confirmada aunque falle el snapshot.
                 self.estado = self.persistencia.cargar()
@@ -135,6 +149,7 @@ def conectar_mqtt(servicio, args):
         servicio.conectado = reason_code == 0
         if servicio.conectado:
             client.subscribe(args.prefijo + "/telemetria", qos=1)
+            client.subscribe(args.prefijo + "/+/telemetria", qos=1)
         else:
             LOG.error("Broker rechazó conexión: %s", reason_code)
 
@@ -145,7 +160,7 @@ def conectar_mqtt(servicio, args):
         try:
             if len(msg.payload) > 16384:
                 raise ValueError("Mensaje demasiado grande")
-            servicio.recibir(msg.payload)
+            servicio.recibir_mqtt(msg.topic, msg.payload, args.prefijo)
         except (ValueError, OSError):
             LOG.exception("Telemetría rechazada o no guardada")
 
