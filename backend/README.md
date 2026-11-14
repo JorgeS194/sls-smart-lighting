@@ -19,7 +19,7 @@ Invoke-RestMethod http://127.0.0.1:8000/api/lecturas -Method Post -ContentType '
 
 | Método | Ruta | Respuesta |
 |---|---|---|
-| GET | /api/salud | estado y mqtt_conectado |
+| GET | /api/salud | estado, mqtt_conectado y mqtt_configurado |
 | GET | /api/estado | zonas, lecturas y ultima_actualizacion |
 | GET | /api/historial?limite=100&zona=SALA | objeto historial con filas más recientes primero |
 | POST | /api/lecturas | 201 con el estado actualizado |
@@ -29,7 +29,7 @@ Zonas: SALA, HABITACION_1, HABITACION_2. El filtro zona del historial es
 opcional. limite acepta 1–1000; predeterminado 100.
 Cada entrada de zonas tiene sensor, valor, clasificacion, luz y
 ultima_actualizacion. Las lecturas, clasificaciones, luces y fechas empiezan
-en null hasta recibir información. Fechas ISO 8601 en UTC.
+en null hasta recibir información. Las fechas se expresan en ISO 8601.
 Cada fila del historial tiene fecha_hora, zona, sensor, valor, evento,
 clasificacion y luz (booleano o null).
 
@@ -98,8 +98,7 @@ APAGAR_LUZ, LECTURA, IRQ_PIR.
 
 Clasificación: distancia con umbrales de 30 y 100 cm; LDR con histéresis
 2000 ± 150 y oscuridad con valores altos. El control de actuadores y los
-temporizadores siguen en el firmware. El firmware actual todavía necesita
-que su responsable agregue MQTT y el manejo de comandos.
+temporizadores siguen en el firmware.
 
 Opciones: --puerto 8000, --datos backend/datos, --puerto-mqtt 1883,
 --tls (usar --puerto-mqtt 8883 si corresponde).
@@ -119,8 +118,8 @@ nuevamente; no hay deduplicación MQTT.
 python -m unittest backend.test_backend -v
 ```
 
-La prueba con broker real y ESP32 queda pendiente de la plataforma elegida
-y de la implementación MQTT del firmware.
+La prueba con broker y ESP32 requiere configurar el broker y el prefijo
+en ambos extremos.
 
 ## Dashboard local
 
@@ -146,7 +145,10 @@ receptor suspende la comprobación del silencio hasta que vuelva a conectarse.
 
 Usa `--silencio-s` para ajustar el tiempo de silencio. El valor por defecto
 es 6 segundos. Para cada dispositivo se aplica como mínimo el triple de su
-intervalo de publicación anunciado. El archivo `eventos_comunicacion.csv`,
-en el directorio indicado por `--datos`, contiene fecha UTC, tipo, gravedad
-y detalle con dispositivo y sesión. Cada proceso registra la primera
-observación de estado y luego solo sus cambios.
+intervalo de publicación anunciado. Los CSV se guardan en el directorio
+indicado por `--datos`:
+
+- `eventos_comunicacion.csv` registra fecha ISO 8601 con milisegundos en UTC
+  (`+00:00`), tipo, gravedad y detalle con dispositivo y sesión. Cada proceso
+  registra la primera observación de estado y luego solo sus cambios.
+- `historial.csv` registra las lecturas con hora de Panamá (`-05:00`).
