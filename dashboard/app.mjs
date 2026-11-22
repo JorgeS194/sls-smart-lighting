@@ -1,4 +1,4 @@
-import { ZONES, LABELS, escapeHTML as h, timeLabel, filterEvents, csv, stateFromEvents, demoEvent, initialDemo, reading } from './model.mjs';
+import { ZONES, LABELS, escapeHTML as h, timeLabel, filterEvents, csv, stateFromEvents, demoEvent, initialDemo, reading, ControlManual } from './model.mjs';
 const $ = id => document.getElementById(id);
 const icon = name => `<svg class="icon" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 let demo = false;
@@ -10,6 +10,7 @@ let view = 'inicio';
 let limit = 50;
 let manual = new Set();
 let toastTimer;
+const control = new ControlManual();
 const headings = {
   inicio: ['Vista general', 'Todo en su mejor luz', 'Un vistazo a tus espacios. El control, donde debe estar.'],
   zonas: ['Mis zonas', 'Espacios que responden a ti', 'Tres zonas, tres sensores. Una casa más inteligente.'],
@@ -35,10 +36,29 @@ function setView(next) {
   document.querySelectorAll('.nav-item').forEach(b => { const active = b.dataset.view === view; b.classList.toggle('active', active); if (active) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   setMenu(false); history.replaceState(null, '', '#' + view);
 }
-function setDemo(value) { demo = value; render(); toast(demo ? 'Demos activadas. Los controles no afectan a la placa.' : 'Modo conectado: solo se muestran eventos recibidos por el backend.'); }
+function setDemo(value) { demo = value; render(); toast(demo ? 'Demos activadas. Los controles no afectan a la placa.' : 'Modo conectado: el estado se confirma con la telemetría de la placa.'); }
 function card(zone, expanded = false) {
   const on = zone.luz === true, unknown = zone.luz === null;
-  return `<article class="zone-card ${on ? 'on' : ''} ${selected === zone.id ? 'selected' : ''}"><div class="zone-card-top"><button class="zone-title-button" data-select="${zone.id}" aria-label="Ver ${h(zone.name)}"><span class="zone-bulb">${icon('bulb')}</span><span><span class="zone-name">${zone.name}</span><span class="zone-subtitle">${zone.sensor} · ${demo && manual.has(zone.id) ? 'Manual · demo' : 'Automático'}</span></span></button><button class="switch" role="switch" aria-label="${on ? 'Apagar' : 'Encender'} ${h(zone.name)}${demo ? ' en demostración' : ' (control real no disponible)'}" aria-checked="${on}" data-toggle="${zone.id}" ${demo ? '' : 'disabled'} title="${demo ? 'Control simulado, sin efecto en el ESP32' : 'El firmware aún no admite comandos remotos'}"></button></div>${expanded ? `<div class="expanded-content"><span class="expanded-label">${zone.subtitle}</span><div class="expanded-value">${h(reading(zone))}</div><p class="zone-description">${zone.description}</p><div class="control-mode"><span>Control ${manual.has(zone.id) && demo ? 'manual · demo' : 'automático'}</span><button class="auto-button ${manual.has(zone.id) && demo ? 'manual' : ''}" data-auto="${zone.id}" ${demo ? '' : 'disabled'}>${manual.has(zone.id) && demo ? 'Volver a auto' : 'Auto activo'}</button></div></div>` : ''}<div class="zone-card-bottom"><span class="zone-light-state"><i class="tiny-dot"></i>${unknown ? 'Sin datos' : on ? 'Luz encendida' : 'Luz apagada'}</span><span class="zone-reading">${h(reading(zone))}</span></div></article>`;
+  const manualMode = demo ? manual.has(zone.id) : zone.modo === 'manual';
+  const pendiente = !demo && control.pendientes.get(zone.id);
+  const error = !demo && control.errores.get(zone.id);
+  const disponible = demo || (backendOK && real.mqtt.conectado && Boolean(real.mqtt.destino) && !unknown);
+  const deshabilitado = !disponible || Boolean(pendiente);
+  const modo = manualMode ? demo ? 'Manual · demo' : 'Manual' : 'Automático';
+  const estado = pendiente ? pendiente.id ? 'Orden enviada · esperando telemetría' : 'Enviando orden…' : error;
+  return `<article class="zone-card ${on ? 'on' : ''} ${selected === zone.id ? 'selected' : ''}">
+    <div class="zone-card-top"><button class="zone-title-button" data-select="${zone.id}" aria-label="Ver ${h(zone.name)}">
+      <span class="zone-bulb">${icon('bulb')}</span><span><span class="zone-name">${zone.name}</span>
+      <span class="zone-subtitle">${zone.sensor} · ${modo}</span></span></button>
+      <button class="switch" role="switch" aria-label="${on ? 'Apagar' : 'Encender'} ${h(zone.name)}${demo ? ' en demostración' : ''}"
+        aria-checked="${on}" aria-busy="${Boolean(pendiente)}" data-toggle="${zone.id}" ${deshabilitado ? 'disabled' : ''}
+        title="${demo ? 'Control simulado, sin efecto en el ESP32' : 'El estado real se confirma con la telemetría'}"></button></div>
+    ${expanded ? `<div class="expanded-content"><span class="expanded-label">${zone.subtitle}</span>
+      <div class="expanded-value">${h(reading(zone))}</div><p class="zone-description">${zone.description}</p>
+      <div class="control-mode"><span>Control ${modo}</span>${demo ? `<button class="auto-button ${manualMode ? 'manual' : ''}" data-auto="${zone.id}">${manualMode ? 'Volver a auto' : 'Auto activo'}</button>` : ''}</div></div>` : ''}
+    ${!demo && manualMode ? `<button class="auto-button manual" data-auto="${zone.id}" ${deshabilitado ? 'disabled' : ''}>Volver a automático</button>` : ''}
+    ${estado ? `<p class="command-status ${error ? 'command-error' : ''}" role="${error ? 'alert' : 'status'}">${h(estado)}</p>` : ''}
+    <div class="zone-card-bottom"><span class="zone-light-state"><i class="tiny-dot"></i>${unknown ? 'Sin datos' : on ? 'Luz encendida' : 'Luz apagada'}</span><span class="zone-reading">${h(reading(zone))}</span></div></article>`;
 }
 function eventTable(rows, empty = 'Tu hogar aún no tiene eventos') {
   if (!rows.length) return `<div class="empty-state">${icon('activity')}<b>${h(empty)}</b><p>${demo ? 'Prueba los controles de las zonas o cambia los filtros.' : 'Inicia Wokwi y espera las primeras lecturas del receptor MQTT.'}</p></div>`;
@@ -60,7 +80,7 @@ function render() {
   $('stat-connection-note').textContent = demo ? 'Sin conexión a la placa' : !backendOK ? 'Inicia el backend en Python' : real.mqtt.conectado ? fresh ? 'MQTT activo · datos recientes' : 'MQTT activo · sin eventos recientes' : 'Receptor MQTT sin conexión';
   $('connection-dot').className = `tiny-dot ${!demo && real.mqtt.conectado ? 'green-dot' : 'amber-dot'}`;
   $('mode-label').textContent = demo ? 'Modo demostración' : 'Modo conectado';
-  $('notice-text').textContent = demo ? 'Estás explorando una demostración. Los datos y controles son simulados.' : !backendOK ? 'El backend no responde. Los datos mostrados pueden estar desactualizados.' : 'Datos recibidos del backend local. El control remoto de la placa aún no está habilitado.';
+  $('notice-text').textContent = demo ? 'Estás explorando una demostración. Los datos y controles son simulados.' : !backendOK ? 'El backend no responde. Los datos mostrados pueden estar desactualizados.' : real.mqtt.conectado && real.mqtt.destino ? 'Puedes controlar las tres luces. El estado se confirma con la telemetría de la placa.' : 'Control remoto no disponible: comprueba la conexión MQTT y el dispositivo destino.';
   $('live-button').textContent = demo ? 'Ver datos reales ↗' : 'Explorar demo ↗';
   document.querySelector('.stat-line').hidden = !demo;
   document.querySelectorAll('.mini-bars i').forEach((bar, i) => bar.classList.toggle('lit', i < lights));
@@ -69,7 +89,7 @@ function render() {
   const zone = state.find(z => z.id === selected);
   $('detail-title').textContent = `${zone.name} · Sensor ${zone.sensor}`;
   $('detail-text').textContent = `${reading(zone)}${zone.recibido ? ' · Último evento ' + timeLabel(zone.recibido, false) : ' · Esperando datos'}`;
-  $('detail-tag').textContent = demo && manual.has(zone.id) ? 'Manual · demo' : 'Automático';
+  $('detail-tag').textContent = demo ? manual.has(zone.id) ? 'Manual · demo' : 'Automático' : zone.modo === 'manual' ? 'Manual' : 'Automático';
   $('sensor-view').innerHTML = state.map(z => `<div class="sensor-row"><b>${z.name}</b><span>${z.sensor}</span><strong>${h(reading(z))}</strong></div>`).join('');
   $('recent-events').innerHTML = eventTable(filterEvents(events(), '', '').slice(0, 4)); renderHistory();
   $('all-off').disabled = !demo; $('connection-mode').textContent = demo ? 'Demostración aislada' : 'Datos recibidos'; $('backend-status').textContent = backendOK ? 'Disponible · local' : 'No disponible';
@@ -77,12 +97,29 @@ function render() {
 }
 function addDemo(zone, name, value, light) { demoEvents.push(demoEvent(zone, name, value, light, demoEvents.length + 1)); }
 function toggleZone(id) {
-  if (!demo) return; const zone = zones().find(z => z.id === id); const on = !zone.luz; manual.add(id); addDemo(id, on ? 'LUZ_ENCENDIDA' : 'LUZ_APAGADA', '', on); render(); toast(`${zone.name}: luz ${on ? 'encendida' : 'apagada'} en la demostración.`);
+  if (!demo) return enviarOrden(id, zones().find(z => z.id === id)?.luz ? 'apagar' : 'encender'); const zone = zones().find(z => z.id === id); const on = !zone.luz; manual.add(id); addDemo(id, on ? 'LUZ_ENCENDIDA' : 'LUZ_APAGADA', '', on); render(); toast(`${zone.name}: luz ${on ? 'encendida' : 'apagada'} en la demostración.`);
+}
+async function enviarOrden(id, accion) {
+  if (control.pendientes.has(id)) return;
+  if (!backendOK || !real.mqtt.conectado || !real.mqtt.destino) {
+    control.errores.set(id, 'Receptor MQTT desconectado o dispositivo destino sin configurar');
+    render();
+    return;
+  }
+  const envio = control.ordenar(id, accion);
+  render();
+  const enviado = await envio;
+  if (enviado) toast('Orden enviada. El estado real se confirma con la telemetría.');
+  render();
 }
 document.addEventListener('click', e => {
   const toggle = e.target.closest('[data-toggle]'); if (toggle) toggleZone(toggle.dataset.toggle);
   const select = e.target.closest('[data-select]'); if (select) { selected = select.dataset.select; render(); }
-  const auto = e.target.closest('[data-auto]'); if (auto && demo) { manual.delete(auto.dataset.auto); render(); toast('Control automático restaurado en la demostración.'); }
+  const auto = e.target.closest('[data-auto]');
+  if (auto) {
+    if (demo) { manual.delete(auto.dataset.auto); render(); toast('Control automático restaurado en la demostración.'); }
+    else enviarOrden(auto.dataset.auto, 'auto');
+  }
 });
 document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
 document.querySelectorAll('.room').forEach(room => { const select = () => { selected = room.dataset.room; render(); }; room.addEventListener('click', select); room.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); } }); });
@@ -121,19 +158,21 @@ async function poll() {
       zonas: ZONES.map(({ id }) => {
         const zone = estado.zonas[id.replaceAll(' ', '_')];
         return { zona: id, luz: zone.luz, lectura: zone.valor, recibido: zone.ultima_actualizacion,
-          evento: zone.clasificacion, presencia: zone.sensor === 'PIR' && zone.valor !== null ? zone.valor === 1 : null };
+          evento: zone.clasificacion, modo: zone.modo ?? "auto", orden_id: zone.orden_id, presencia: zone.sensor === 'PIR' && zone.valor !== null ? zone.valor === 1 : null };
       }),
       eventos: historial.reverse().map(row => ({
         ...row, zona: row.zona.replaceAll('_', ' '), recibido: row.fecha_hora, dispositivo: 'Receptor Python',
       })),
       total_eventos: estado.lecturas, actualizado: estado.ultima_actualizacion,
-      mqtt: { configurado: salud.mqtt_configurado, conectado: salud.mqtt_conectado },
+      mqtt: { configurado: salud.mqtt_configurado, conectado: salud.mqtt_conectado, destino: salud.dispositivo_comandos },
     };
     const changed = !backendOK || JSON.stringify(next) !== JSON.stringify(real);
     real = next;
     backendOK = true;
-    if (changed) render();
-  } catch { if (backendOK) { backendOK = false; render(); } }
+    const pendientesAntes = control.pendientes.size;
+    control.actualizar(zones());
+    if (changed || pendientesAntes || control.errores.size) render();
+  } catch { backendOK = false; control.actualizar(zones()); render(); }
 }
 function clock() { $('local-clock').textContent = new Intl.DateTimeFormat('es-PA', { timeZone: 'America/Panama', weekday: 'short', day: 'numeric', month: 'short' }).format(new Date()); }
 // La demo es determinista e independiente del backend. No genera tráfico MQTT.

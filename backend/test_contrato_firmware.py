@@ -19,6 +19,31 @@ class ContratoFirmwareTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.servicio = Servicio(self.tmp.name)
 
+    def test_modos_confirmados_son_opcionales_validos_y_no_persistentes(self):
+        mensaje = dict(version=2, dispositivo="demo", sesion="s", secuencia=1,
+                       intervalo_ms=2000, lecturas=dict(pir=0, ldr_adc=400, distancia_cm=60),
+                       luces=dict(SALA=True, HABITACION_1=False, HABITACION_2=False),
+                       modos=dict(SALA="manual", HABITACION_1="auto", HABITACION_2="auto"),
+                       ordenes={"SALA": "id-1"})
+        self.servicio.dispositivo_comandos = "demo"
+        self.servicio.recibir_mqtt("equipo/demo/telemetria", mensaje, "equipo")
+        self.assertEqual(self.servicio.modos, mensaje["modos"])
+        self.assertEqual(self.servicio.ordenes, mensaje["ordenes"])
+        for campo, invalido in (("modos", {"SALA": "otro"}), ("modos", []),
+                                 ("ordenes", {"OTRA": "id"}), ("ordenes", {"SALA": ""})):
+            with self.subTest(campo=campo, invalido=invalido):
+                with self.assertRaises(ValueError):
+                    self.servicio.recibir_mqtt("equipo/demo/telemetria", dict(mensaje, **{campo: invalido}), "equipo")
+        self.assertEqual(self.servicio.estado["lecturas"], 3)
+        restaurado = Servicio(self.tmp.name)
+        self.assertEqual(restaurado.modos, {})
+        restaurado.recibir_mqtt("equipo/demo/telemetria", mensaje, "equipo")
+        self.assertEqual(restaurado.modos, mensaje["modos"])
+        legado = {k: v for k, v in mensaje.items() if k not in ("modos", "ordenes")}
+        restaurado.recibir_mqtt("equipo/demo/telemetria", legado, "equipo")
+        self.assertEqual(restaurado.modos, {})
+        self.assertEqual(len(restaurado.persistencia.historial(100)), 9)
+
     def test_conserva_contrato_original_de_lecturas(self):
         dato = {"zona": "HABITACION_1", "sensor": "HC-SR04", "valor": 95}
         self.assertEqual(validar_mensaje(dato), dict(dato, evento="LECTURA"))

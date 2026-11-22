@@ -82,6 +82,15 @@ def validar_instantanea(payload, dispositivo):
         raise ValueError("Se requiere el estado booleano de las tres luces")
     if any(type(lecturas.get(campo)) is not int for campo in ("pir", "ldr_adc")):
         raise ValueError("PIR y LDR requieren lecturas enteras")
+    modos = mensaje.get("modos", {})
+    ordenes = mensaje.get("ordenes", {})
+    if not isinstance(modos, dict) or any(
+            zona not in SENSORES or modo not in ("auto", "manual") for zona, modo in modos.items()):
+        raise ValueError("Modos de zona inválidos")
+    if not isinstance(ordenes, dict) or any(
+            zona not in SENSORES or not isinstance(identificador, str) or not identificador.strip()
+            for zona, identificador in ordenes.items()):
+        raise ValueError("Confirmaciones de órdenes inválidas")
     filas = []
     for zona, campo in (("SALA", "pir"), ("HABITACION_1", "distancia_cm"),
                         ("HABITACION_2", "ldr_adc")):

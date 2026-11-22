@@ -54,3 +54,17 @@ def procesar_ldr(zona, valor):
     """Habitación 2: logica.py decide, controlador.py ejecuta."""
     for evento in logica.evaluar_zona_ldr(zona, valor):
         aplicar_evento(zona, evento, valor)
+
+
+def aplicar_orden(zona, orden):
+    """La anulación vive en la zona; repetirla no genera otra transición."""
+    accion = orden["accion"]
+    modo = "auto" if accion == "auto" else "manual"
+    objetivo = accion == "encender"
+    cambio = zona.get("modo", "auto") != modo or (
+        modo == "manual" and zona.get("manual") != objetivo)
+    zona["modo"] = modo
+    if modo == "manual":
+        zona["manual"] = objetivo
+    if cambio:
+        print("[{}] Orden MQTT aplicada: {}".format(zona["nombre"], accion))

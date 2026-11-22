@@ -9,3 +9,7 @@
 @media(max-width:940px) and (min-width:651px){.zones-column .zone-name{font-size:11px}.zones-column .zone-subtitle{font-size:8px}}
 @media(max-width:650px){.zone-name,.zones-column .zone-name{font-size:14px}.panel-heading p{font-size:11px}.button,.text-button,.mode-button{font-size:10px}.mode-notice,.mode-notice button{font-size:10px}.stat-label{font-size:10px}.stat-foot{font-size:9px}.stat-line{width:35px;opacity:.5}.stat-value>span{font-size:10px}.plan-legend{font-size:8px}.zone-detail b{font-size:10px}.zone-detail small{font-size:9px}.section-title .button{font-size:9px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+.command-status{margin:10px 0;font-size:12px;color:#59654d}
+.command-error{color:#9c332b}
+.switch[aria-busy="true"]{opacity:.55;cursor:wait}
