@@ -354,13 +354,13 @@ class PruebaRed(unittest.TestCase):
         self.config.HABILITAR_ORDENES_MQTT = True
         self.broker.entrantes.extend([
             b'{"id":"1","zona":"SALA","accion":"apagar"}',
-            b'{"id":"2","zona":"SALA","accion":"encender"}',
+            b'{"id":"2","zona":"SALA","accion":"desconocida"}',
             b'{"id":"3","zona":"SALA","accion":"auto"}',
         ])
         self.servicio.paso()
         self.assertEqual(self.broker.clientes[0].suscripcion, self.servicio.topico_comandos)
         self.servicio.paso()
-        self.assertEqual(self.servicio.tomar_orden(), "apagar")
+        self.assertEqual(self.servicio.tomar_orden()["accion"], "apagar")
         self.assertIsNone(self.servicio.tomar_orden())
         self.assertIn("Orden rechazada", sys.stdout.getvalue())
         self.wifi.conectado = False
@@ -368,7 +368,7 @@ class PruebaRed(unittest.TestCase):
         self.wifi.conectado = True
         self.servicio.paso()
         self.assertEqual(self.broker.clientes[1].suscripcion, self.servicio.topico_comandos)
-        self.assertEqual(self.servicio.tomar_orden(), "auto")
+        self.assertEqual(self.servicio.tomar_orden()["accion"], "auto")
 
     def test_orden_apagar_en_ciclo_principal(self):
         fuente = (FIRMWARE / "main.py").read_text(encoding="utf-8")
@@ -388,6 +388,69 @@ class PruebaRed(unittest.TestCase):
         self.assertIn("[SALA] Presencia detectada", salida)
         self.assertNotIn("[SALA] Luz ENCENDIDA", salida)
         self.assertIn("[HABITACION 1] Luz ENCENDIDA", salida)
+
+    def test_ordenes_independientes_invalidas_y_confirmacion_inmediata(self):
+        for zona in ("SALA", "HABITACION_1", "HABITACION_2"):
+            orden = {"id": zona, "zona": zona, "accion": "encender"}
+            self.servicio._recibir_orden(self.servicio.topico_comandos, json.dumps(orden).encode())
+        recibidas = [self.servicio.tomar_orden() for _ in range(3)]
+        self.assertEqual({o["zona"] for o in recibidas}, {"SALA", "HABITACION_1", "HABITACION_2"})
+        for cambio in ({"zona": "OTRA"}, {"zona": []}, {"accion": "otra"}, {"id": ""}):
+            orden = dict(id="x", zona="SALA", accion="encender", **{})
+            orden.update(cambio)
+            self.servicio._recibir_orden(self.servicio.topico_comandos, json.dumps(orden).encode())
+        self.assertIsNone(self.servicio.tomar_orden())
+        self.assertIn("Orden rechazada", sys.stdout.getvalue())
+        modos = dict(SALA="manual", HABITACION_1="auto", HABITACION_2="auto")
+        self.servicio.muestrear(0, 400, 150, True, False, False, modos, {"SALA": "orden-1"})
+        primera = json.loads(self.servicio.instantanea)
+        self.assertEqual(primera["modos"], modos)
+        self.assertEqual(primera["ordenes"], {"SALA": "orden-1"})
+        self.ms += self.config.TELEMETRIA_INTERVALO_MS
+        self.servicio.muestrear(0, 400, 150, True, False, False, modos)
+        siguiente = json.loads(self.servicio.instantanea)
+        self.assertEqual(siguiente["modos"], modos)
+        self.assertEqual(siguiente["ordenes"], primera["ordenes"])
+
+    def test_manual_tres_zonas_sensores_temporizadores_y_repeticion(self):
+        fuente = (FIRMWARE / "main.py").read_text(encoding="utf-8")
+        _, ns = ejecutar(fuente, "main.py")
+        zonas, controlador = ns["zonas"], ns["controlador"]
+        reloj = types.SimpleNamespace(ticks_ms=lambda: 100000, ticks_diff=lambda a, b: a - b)
+        with patch.object(controlador, "time", reloj), patch.object(ns["logica"], "time", reloj):
+            for zona in (zonas.sala, zonas.hab1, zonas.hab2):
+                with self.subTest(zona=zona["nombre"]):
+                    otras = [z for z in (zonas.sala, zonas.hab1, zonas.hab2) if z is not zona]
+                    previas = [z.copy() for z in otras]
+                    def evaluar(presencia, ldr):
+                        if zona is zonas.hab2:
+                            controlador.procesar_ldr(zona, ldr)
+                        else:
+                            controlador.procesar_presencia(zona, presencia)
+                    for accion, luz in (("encender", True), ("apagar", False)):
+                        orden = dict(accion=accion)
+                        controlador.aplicar_orden(zona, orden)
+                        evaluar(not luz, 400 if luz else 3000)
+                        self.assertIs(zona["luz"], luz)
+                        self.assertEqual(zona["modo"], "manual")
+                        self.assertEqual(ns["actuador_leds"]._estado & 31, 0)
+                        eventos = len(ns["historial"].eventos())
+                        salida = sys.stdout.getvalue()
+                        controlador.aplicar_orden(zona, orden)
+                        evaluar(not luz, 400 if luz else 3000)
+                        self.assertEqual(len(ns["historial"].eventos()), eventos)
+                        self.assertEqual(sys.stdout.getvalue(), salida)
+                    controlador.aplicar_orden(zona, {"accion": "auto"})
+                    evaluar(True, 3000)
+                    self.assertTrue(zona["luz"])
+                    self.assertEqual(zona["modo"], "auto")
+                    evaluar(False, 400)
+                    if zona is not zonas.hab2:
+                        reloj.ticks_ms = lambda: 106000
+                        evaluar(False, 400)
+                        reloj.ticks_ms = lambda: 100000
+                    self.assertFalse(zona["luz"])
+                    self.assertEqual(otras, previas)
 
     def test_main_sin_wifi_con_broker_caido_y_conectado(self):
         fuente = (FIRMWARE / "main.py").read_text(encoding="utf-8")

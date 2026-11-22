@@ -34,6 +34,9 @@ class Servicio:
         self.mqtt = None
         self.conectado = False
         self.topico_comandos = ""
+        self.dispositivo_comandos = None
+        self.modos = {}
+        self.ordenes = {}
 
     def recibir(self, payload):
         return self._guardar_lecturas([validar_mensaje(payload)])
@@ -53,6 +56,9 @@ class Servicio:
             mensaje = objeto_json(payload)
             filas = validar_instantanea(mensaje, dispositivo)
             resultado = self._guardar_lecturas(filas)
+            if self.dispositivo_comandos is None or dispositivo == self.dispositivo_comandos:
+                self.modos = mensaje.get("modos", {}).copy()
+                self.ordenes = mensaje.get("ordenes", {}).copy()
             self.monitor.telemetria(dispositivo, mensaje["sesion"], mensaje["intervalo_ms"])
             return resultado
 
@@ -125,9 +131,13 @@ def crear_handler(servicio, origen):
                 with servicio.lock:
                     if ruta.path == "/api/salud":
                         datos = {"estado": "ok", "mqtt_conectado": servicio.conectado,
-                                 "mqtt_configurado": servicio.mqtt is not None}
+                                 "mqtt_configurado": servicio.mqtt is not None,
+                                 "dispositivo_comandos": servicio.dispositivo_comandos}
                     elif ruta.path == "/api/estado":
                         datos = deepcopy(servicio.estado)
+                        for zona, estado_zona in datos["zonas"].items():
+                            estado_zona["modo"] = servicio.modos.get(zona, "auto")
+                            estado_zona["orden_id"] = servicio.ordenes.get(zona)
                     elif ruta.path == "/api/historial":
                         parametros = parse_qs(ruta.query)
                         limite = int(parametros.get("limite", ["100"])[0])
@@ -189,6 +199,7 @@ def conectar_mqtt(servicio, args):
 
     cliente = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="sls-backend-" + uuid4().hex[:12])
     servicio.mqtt = cliente
+    servicio.dispositivo_comandos = args.dispositivo_comandos
     destino = f"/{args.dispositivo_comandos}" if args.dispositivo_comandos else ""
     servicio.topico_comandos = f"{args.prefijo}{destino}/comandos"
     usuario = os.getenv("SLS_MQTT_USUARIO")

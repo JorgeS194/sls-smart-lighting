@@ -9,12 +9,12 @@ import config
 
 # Sala (PIR): presencia + temporizador de apagado.
 sala = {"nombre": "SALA", "bit": config.BIT_SALA,
-        "presencia": False, "luz": False, "ultima": 0}
+        "presencia": False, "luz": False, "ultima": 0, "modo": "auto", "manual": False}
 
 # Habitación 1 (HC-SR04): presencia por distancia + temporizador de apagado.
 hab1 = {"nombre": "HABITACION 1", "bit": config.BIT_HAB1,
-        "presencia": False, "luz": False, "ultima": 0}
+        "presencia": False, "luz": False, "ultima": 0, "modo": "auto", "manual": False}
 
 # Habitación 2 (LDR): oscuridad con histéresis (no usa temporizador).
 hab2 = {"nombre": "HABITACION 2", "bit": config.BIT_HAB2,
-        "oscuro": False, "luz": False}
+        "oscuro": False, "luz": False, "modo": "auto", "manual": False}

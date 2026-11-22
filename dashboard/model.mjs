@@ -39,3 +39,54 @@ export function reading(zone) {
   if (zone.sensor === 'PIR') return zone.presencia === null ? 'Sin datos' : zone.presencia ? 'Movimiento' : 'Sin movimiento';
   return zone.lectura === null || zone.lectura === undefined ? 'Sin lectura' : `${zone.lectura} ${zone.unit}`;
 }
+
+// La luz y el modo siempre proceden de telemetría. La petición solo fija el pendiente.
+export class ControlManual {
+  constructor(enviar = (...args) => fetch(...args), reloj = () => Date.now()) {
+    this.enviar = enviar;
+    this.reloj = reloj;
+    this.pendientes = new Map();
+    this.errores = new Map();
+  }
+
+  async ordenar(zona, accion) {
+    if (this.pendientes.has(zona)) return false;
+    const pendiente = { accion, hasta: this.reloj() + 10000, id: null };
+    this.pendientes.set(zona, pendiente);
+    this.errores.delete(zona);
+    try {
+      const respuesta = await this.enviar('/api/comandos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zona: zona.replaceAll(' ', '_'), accion }),
+        signal: AbortSignal.timeout(5000),
+      });
+      const datos = await respuesta.json();
+      if (respuesta.status !== 202) throw new Error(datos.error || 'No se pudo enviar la orden');
+      if (!datos.comando?.id) throw new Error('El receptor no devolvió el identificador de la orden');
+      pendiente.id = datos.comando.id;
+      return true;
+    } catch (error) {
+      if (this.pendientes.get(zona) === pendiente) {
+        this.pendientes.delete(zona);
+        this.errores.set(zona, error.name === 'TimeoutError' ? 'El receptor no responde' : error.message);
+      }
+      return false;
+    }
+  }
+
+  actualizar(zonas) {
+    for (const [nombre, pendiente] of this.pendientes) {
+      const zona = zonas.find(z => z.id === nombre);
+      const modo = pendiente.accion === 'auto' ? 'auto' : 'manual';
+      const luzCorrecta = pendiente.accion === 'auto' || zona?.luz === (pendiente.accion === 'encender');
+      if (pendiente.id && zona?.orden_id === pendiente.id && zona.modo === modo && luzCorrecta) {
+        this.pendientes.delete(nombre);
+        this.errores.delete(nombre);
+      } else if (this.reloj() >= pendiente.hasta) {
+        this.pendientes.delete(nombre);
+        this.errores.set(nombre, 'Sin confirmación de la placa');
+      }
+    }
+  }
+}

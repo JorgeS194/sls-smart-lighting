@@ -15,7 +15,7 @@ def evento(zona, nombre, valor, luz, secuencia, sesion, tiempo_ms):
     }).encode("utf-8")
 
 
-def telemetria(sesion, secuencia, pir, ldr, distancia, luces):
+def telemetria(sesion, secuencia, pir, ldr, distancia, luces, modos=None, ordenes=None):
     if distancia is not None and not 2 <= distancia <= 400:
         distancia = None
     return json.dumps({
@@ -24,6 +24,8 @@ def telemetria(sesion, secuencia, pir, ldr, distancia, luces):
         "intervalo_ms": config.TELEMETRIA_INTERVALO_MS,
         "lecturas": {"pir": int(pir), "ldr_adc": ldr, "distancia_cm": distancia},
         "luces": luces,
+        "modos": modos or {zona: "auto" for zona in luces},
+        "ordenes": ordenes or {},
     }).encode("utf-8")
 
 

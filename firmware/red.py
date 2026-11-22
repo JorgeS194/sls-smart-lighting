@@ -38,7 +38,8 @@ class ServicioRed:
             config.MQTT_PREFIJO_TELEMETRIA, config.MQTT_DISPOSITIVO).encode()
         self.topico_comandos = self.topico_telemetria.rsplit(b"/", 1)[0] + b"/comandos"
         self.topico_estado = self.topico_telemetria.rsplit(b"/", 1)[0] + b"/estado"
-        self.orden = None
+        self.ordenes = {}
+        self.confirmadas = {}
 
     def _recibir_orden(self, topico, payload):
         if topico != self.topico_comandos:
@@ -53,29 +54,36 @@ class ServicioRed:
             if not isinstance(identificador, str) or not identificador.strip():
                 raise ValueError("id inválido")
             accion = orden.get("accion")
-            if orden.get("zona") != "SALA" or accion not in ("apagar", "auto"):
+            zona = orden.get("zona")
+            if (not isinstance(zona, str)
+                    or zona not in ("SALA", "HABITACION_1", "HABITACION_2")
+                    or accion not in ("encender", "apagar", "auto")):
                 raise ValueError("zona o acción no admitida")
         except (ValueError, UnicodeError) as error:
             print("[RED] Orden rechazada:", error)
             return
         with self.candado:
             # Las órdenes fijan el modo. Si coinciden, prevalece la última válida.
-            self.orden = accion
+            self.ordenes[zona] = orden
 
     def tomar_orden(self):
         with self.candado:
-            orden = self.orden
-            self.orden = None
-        return orden
+            if not self.ordenes:
+                return None
+            zona = next(iter(self.ordenes))
+            return self.ordenes.pop(zona)
 
-    def muestrear(self, pir, ldr, distancia, sala, hab1, hab2):
+    def muestrear(self, pir, ldr, distancia, sala, hab1, hab2, modos=None, ordenes=None):
         ahora = time.ticks_ms()
-        if time.ticks_diff(ahora, self.ultima_muestra) < config.TELEMETRIA_INTERVALO_MS:
+        if ordenes:
+            self.confirmadas.update(ordenes)
+        if not ordenes and time.ticks_diff(ahora, self.ultima_muestra) < config.TELEMETRIA_INTERVALO_MS:
             return
         self.ultima_muestra = ahora
         self.secuencia += 1
         luces = {"SALA": sala, "HABITACION_1": hab1, "HABITACION_2": hab2}
-        dato = mensajes.telemetria(self.sesion, self.secuencia, pir, ldr, distancia, luces)
+        dato = mensajes.telemetria(self.sesion, self.secuencia, pir, ldr, distancia, luces,
+                                  modos, self.confirmadas)
         with self.candado:
             # Durante una caída solo interesa conservar la lectura más reciente.
             self.instantanea = dato
@@ -226,9 +234,9 @@ def encolar(zona, evento, valor="", luz=None):
         _servicio.encolar(zona, evento, valor, luz)
 
 
-def muestrear(pir, ldr, distancia, sala, hab1, hab2):
+def muestrear(pir, ldr, distancia, sala, hab1, hab2, modos=None, ordenes=None):
     if _servicio is not None:
-        _servicio.muestrear(pir, ldr, distancia, sala, hab1, hab2)
+        _servicio.muestrear(pir, ldr, distancia, sala, hab1, hab2, modos, ordenes)
 
 
 def tomar_orden():

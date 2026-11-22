@@ -42,10 +42,11 @@ def evaluar_zona_presencia(zona, hay_presencia, ahora, manual_apagado=False):
         eventos.append("SIN_PRESENCIA")
     zona["presencia"] = hay_presencia
 
-    if manual_apagado:
-        if zona["luz"]:
-            zona["luz"] = False
-            eventos.append("LUZ_APAGADA")
+    if manual_apagado or zona.get("modo", "auto") == "manual":
+        objetivo = False if manual_apagado else zona["manual"]
+        if zona["luz"] != objetivo:
+            zona["luz"] = objetivo
+            eventos.append("LUZ_ENCENDIDA" if objetivo else "LUZ_APAGADA")
         return eventos
 
     if hay_presencia:
@@ -67,14 +68,11 @@ def evaluar_zona_ldr(zona, valor):
     eventos = []
     oscuro = esta_oscuro(valor, zona["oscuro"])
 
-    if oscuro and not zona["oscuro"]:
-        zona["luz"] = True
-        eventos.append("OSCURIDAD")
-        eventos.append("LUZ_ENCENDIDA")
-    elif not oscuro and zona["oscuro"]:
-        zona["luz"] = False
-        eventos.append("LUZ_SUFICIENTE")
-        eventos.append("LUZ_APAGADA")
-
+    if oscuro != zona["oscuro"]:
+        eventos.append("OSCURIDAD" if oscuro else "LUZ_SUFICIENTE")
     zona["oscuro"] = oscuro
+    objetivo = zona["manual"] if zona.get("modo", "auto") == "manual" else oscuro
+    if zona["luz"] != objetivo:
+        zona["luz"] = objetivo
+        eventos.append("LUZ_ENCENDIDA" if objetivo else "LUZ_APAGADA")
     return eventos

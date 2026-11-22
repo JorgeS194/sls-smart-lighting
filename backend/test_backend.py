@@ -74,6 +74,55 @@ class BackendTests(unittest.TestCase):
             "demo-sala-francesco", "utp/ds8/1gs133/sls-smart-lighting/demo-sala-francesco/comandos"
         )
 
+    def test_api_comandos_tres_zonas_errores_y_destino(self):
+        self.servicio.mqtt = MagicMock()
+        self.servicio.mqtt.publish.return_value.rc = 0
+        self.servicio.conectado = True
+        self.servicio.topico_comandos = "equipo/demo/comandos"
+        servidor = ThreadingHTTPServer(("127.0.0.1", 0), crear_handler(self.servicio, "http://localhost:5173"))
+        hilo = threading.Thread(target=servidor.serve_forever, daemon=True)
+        hilo.start()
+        base = f"http://127.0.0.1:{servidor.server_port}"
+        self.addCleanup(hilo.join)
+        self.addCleanup(servidor.server_close)
+        self.addCleanup(servidor.shutdown)
+        for destino in (None, "demo-sala-francesco"):
+            self.servicio.dispositivo_comandos = destino
+            with urlopen(base + "/api/salud") as r:
+                salud = json.load(r)
+            self.assertEqual(salud["dispositivo_comandos"], destino)
+            self.assertTrue(salud["mqtt_configurado"])
+            self.assertTrue(salud["mqtt_conectado"])
+        self.servicio.modos = {"SALA": "manual"}
+        self.servicio.ordenes = {"SALA": "confirmada"}
+        with urlopen(base + "/api/estado") as r:
+            estado = json.load(r)
+        self.assertEqual(estado["zonas"]["SALA"]["modo"], "manual")
+        self.assertEqual(estado["zonas"]["SALA"]["orden_id"], "confirmada")
+        self.assertEqual(estado["zonas"]["HABITACION_1"]["modo"], "auto")
+        for zona in ("SALA", "HABITACION_1", "HABITACION_2"):
+            for accion in ("encender", "apagar", "auto"):
+                with urlopen(Request(base + "/api/comandos", data=json.dumps(dict(zona=zona, accion=accion)).encode())) as r:
+                    self.assertEqual(r.status, 202)
+                    enviado = json.load(r)["comando"]
+                self.assertEqual(enviado["zona"], zona)
+                self.assertEqual(enviado["accion"], accion)
+                self.assertEqual(self.servicio.mqtt.publish.call_args.kwargs, {"qos": 1, "retain": False})
+        anteriores = self.servicio.mqtt.publish.call_count
+        for comando in (dict(zona="OTRA", accion="encender"), dict(zona="SALA", accion="otra")):
+            with self.assertRaises(HTTPError) as error:
+                urlopen(Request(base + "/api/comandos", data=json.dumps(comando).encode()))
+            self.assertEqual(error.exception.code, 400)
+            self.assertIn("error", json.load(error.exception))
+            error.exception.close()
+        self.servicio.conectado = False
+        with self.assertRaises(HTTPError) as error:
+            urlopen(Request(base + "/api/comandos", data=b'{"zona":"SALA","accion":"encender"}'))
+        self.assertEqual(error.exception.code, 503)
+        self.assertIn("MQTT desconectado", json.load(error.exception)["error"])
+        error.exception.close()
+        self.assertEqual(self.servicio.mqtt.publish.call_count, anteriores)
+
     def test_api(self):
         servidor = ThreadingHTTPServer(('127.0.0.1', 0), crear_handler(self.servicio, 'http://localhost:5173'))
         hilo = threading.Thread(target=servidor.serve_forever, daemon=True)
