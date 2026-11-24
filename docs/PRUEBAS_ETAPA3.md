@@ -74,6 +74,13 @@ conectar sin reiniciar la placa.
 
 ![Reconexión MQTT en la consola de Wokwi](evidencias/prueba4-reconexion-wokwi.png)
 
+Registro del monitor (`eventos_comunicacion.csv`, horas en UTC) con las dos
+pausas: `SIN_DATOS` → `OFFLINE` (Last Will) → `ONLINE`, siempre con la sesión
+`74e6ec99`. Las dos líneas de 02:43:10 son un corte breve anterior a la prueba,
+que se recuperó en menos de un segundo y no llegó a `OFFLINE`.
+
+![Estados del monitor durante las dos pausas](evidencias/prueba4-monitor-estados.png)
+
 **Limitación observada.** La tarjeta *Conexión del hogar* del dashboard muestra el
 estado de la conexión entre el receptor y el broker, no el estado del dispositivo.
 Durante el `OFFLINE` siguió indicando *Conectado · MQTT activo · sin eventos
