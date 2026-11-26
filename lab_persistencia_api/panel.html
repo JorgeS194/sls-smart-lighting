@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel del proyecto</title>
+<style>
+ body{font-family:system-ui,sans-serif;margin:0;background:#f4f7f9;color:#14213d}
+ header{background:#0b5d86;color:#fff;padding:14px 20px;font-size:20px}
+ main{max-width:860px;margin:20px auto;padding:0 16px}
+ .tarjetas{display:flex;gap:12px;flex-wrap:wrap}
+ .t{flex:1;min-width:150px;background:#fff;border-radius:8px;padding:14px;box-shadow:0 1px 3px #0002}
+ .t b{display:block;font-size:28px}
+ table{width:100%;border-collapse:collapse;background:#fff;margin-top:16px}
+ th,td{padding:6px 10px;border-bottom:1px solid #e3e8ec;text-align:left;font-size:14px}
+ th{background:#14213d;color:#fff}
+ #estado{margin-top:10px;font-size:13px;color:#666}
+</style></head><body>
+<header id="titulo">Panel del proyecto</header>
+<main>
+ <div class="tarjetas">
+  <div class="t"><span id="etq">Ultimo valor</span><b id="principal">--</b></div>
+  <div class="t">Promedio<b id="prom">--</b></div>
+  <div class="t">Registros guardados<b id="total">--</b></div>
+ </div>
+ <table><thead id="cab"></thead><tbody id="filas"></tbody></table>
+ <div id="estado">Conectando...</div>
+</main>
+<script>
+let info=null;
+function celda(texto,tag){const td=document.createElement(tag||"td");td.textContent=texto;return td;}
+async function actualizar(){
+  try{
+    if(!info){info=await fetch("/proyecto").then(r=>r.json());
+      document.getElementById("titulo").textContent="Panel: "+info.nombre+" (actualiza cada 3 s)";
+      document.getElementById("etq").textContent=info.principal+" (ultimo)";
+      const tr=document.createElement("tr");
+      for(const k of ["fecha"].concat(info.campos)) tr.append(celda(k,"th"));
+      document.getElementById("cab").replaceChildren(tr);}
+    const [lista,res]=await Promise.all([
+      fetch("/registros?n=10").then(r=>r.json()),
+      fetch("/resumen").then(r=>r.json())]);
+    document.getElementById("total").textContent=res.total;
+    document.getElementById("prom").textContent=res.promedio===null?"--":res.promedio;
+    document.getElementById("principal").textContent=lista.length?lista[0][info.principal]:"--";
+    const cuerpo=document.getElementById("filas");cuerpo.replaceChildren();
+    for(const l of lista){
+      const tr=document.createElement("tr");
+      for(const k of ["fecha"].concat(info.campos)) tr.append(celda(l[k]===null?"":l[k]));
+      cuerpo.append(tr);
+    }
+    document.getElementById("estado").textContent="Ultima actualizacion: "+new Date().toLocaleTimeString();
+  }catch(e){document.getElementById("estado").textContent="Sin conexion con la API";}
+}
+actualizar();setInterval(actualizar,3000);
+</script></body></html>
