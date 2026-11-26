@@ -89,16 +89,27 @@ def ultimos(con, n=10):
 def promedio_por_hora(con):
     # TODO 4: columnas hora (los 13 primeros caracteres de fecha: substr(fecha, 1, 13)), promedio de CAMPO_PRINCIPAL
     #         (1 decimal) y n (cantidad), agrupadas por hora y ordenadas por hora.
-    return []
+    return con.execute(
+        "SELECT substr(fecha, 1, 13) AS hora, ROUND(AVG(%s), 1) AS promedio, COUNT(*) AS n "
+        "FROM %s GROUP BY hora ORDER BY hora" % (CAMPO_PRINCIPAL, TABLA)).fetchall()
 
 
 def resumen(con):
     # TODO 5: una fila con total, minimo, maximo y promedio (1 decimal) de CAMPO_PRINCIPAL.
     #         Con la tabla vacia, total es 0 y los demas valores quedan vacios (None).
-    return con.execute("SELECT 0 AS total, NULL AS minimo, NULL AS maximo, NULL AS promedio").fetchone()
+    # Con la tabla vacia, MIN, MAX y AVG devuelven NULL (None en Python) y COUNT devuelve 0.
+    return con.execute(
+        "SELECT COUNT(*) AS total, MIN(%s) AS minimo, MAX(%s) AS maximo, ROUND(AVG(%s), 1) AS promedio "
+        "FROM %s" % (CAMPO_PRINCIPAL, CAMPO_PRINCIPAL, CAMPO_PRINCIPAL, TABLA)).fetchone()
 
 
 def exportar_csv(con, ruta):
     # TODO 6: CSV con encabezado (fecha y las COLUMNAS) y todos los registros en orden de id.
     #         Devuelve la cantidad de filas escritas.
-    return 0
+    filas = con.execute("SELECT fecha, %s FROM %s ORDER BY id" % (", ".join(COLUMNAS), TABLA)).fetchall()
+    with open(ruta, "w", newline="", encoding="utf-8") as archivo:
+        escritor = csv.writer(archivo)
+        escritor.writerow(["fecha"] + COLUMNAS)
+        for fila in filas:
+            escritor.writerow(list(fila))   # un None sale como celda vacia
+    return len(filas)
