@@ -1,8 +1,8 @@
 # Configuracion del proyecto de tu grupo: es el UNICO archivo que cambia entre proyectos.
 # Completa la ficha de la Parte A. Mira ejemplos/ para ver tres proyectos distintos ya configurados.
-NOMBRE = "ESCRIBE EL NOMBRE DE TU PROYECTO"
+NOMBRE = "SLS - Smart Lighting System"
 TABLA = "registros"              # nombre de la tabla en la base de datos
-TEMA = "tuproyecto"              # tema MQTT: utp/ds8/<usuario>/<TEMA>/<TEMA_DATOS>
+TEMA = "sls-smart-lighting"      # tema MQTT: utp/ds8/<usuario>/<TEMA>/<TEMA_DATOS>
 TEMA_DATOS = "telemetria"
 DB = "proyecto.db"
 
@@ -11,9 +11,17 @@ DB = "proyecto.db"
 #   minimo / maximo: limites opcionales (numeros)     permitidos: lista opcional de valores validos
 # Ejemplo:  {"nombre": "temperatura", "tipo": "real", "obligatorio": True, "minimo": -30, "maximo": 30},
 CAMPOS = [
+    {"nombre": "dispositivo",      "tipo": "texto",  "obligatorio": True},
+    {"nombre": "pir",              "tipo": "entero", "obligatorio": True,  "permitidos": [0, 1]},
+    {"nombre": "ldr_adc",          "tipo": "entero", "obligatorio": True,  "minimo": 0, "maximo": 4095},
+    {"nombre": "distancia_cm",     "tipo": "real",   "obligatorio": False, "minimo": 2, "maximo": 400},
+    {"nombre": "luz_sala",         "tipo": "entero", "obligatorio": True,  "permitidos": [0, 1]},
+    {"nombre": "luz_habitacion_1", "tipo": "entero", "obligatorio": True,  "permitidos": [0, 1]},
+    {"nombre": "luz_habitacion_2", "tipo": "entero", "obligatorio": True,  "permitidos": [0, 1]},
 ]
-CAMPO_PRINCIPAL = ""             # campo numerico que se resume y se promedia por hora
-EJEMPLO = {}                     # un mensaje valido de ejemplo con tus campos
+CAMPO_PRINCIPAL = "ldr_adc"      # campo numerico que se resume y se promedia por hora
+EJEMPLO = {"dispositivo": "demo-sala-francesco", "pir": 0, "ldr_adc": 2593,
+           "distancia_cm": 60.0, "luz_sala": 0, "luz_habitacion_1": 1, "luz_habitacion_2": 1}
 
 
 # ---- Comprobacion automatica (no modificar) ----
