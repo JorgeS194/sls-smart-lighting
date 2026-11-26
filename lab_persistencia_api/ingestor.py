@@ -42,7 +42,32 @@ def al_mensaje(cliente, datos, mensaje):
     #     (si hay problema, guarda DATO_RECHAZADO con el motivo y termina); si es valido, db.insertar(con, d)
     #     y suma a guardados.
     #   Captura sqlite3.Error para que el ingestor nunca se detenga. Imprime una linea por cada caso.
-    print("Mensaje en", mensaje.topic, ":", texto[:60])
+    try:
+        if mensaje.topic == T_ESTADO:
+            db.registrar_evento(con, "ESTADO", texto)
+            print("Estado del dispositivo:", texto)
+        elif mensaje.topic == T_DATOS:
+            try:
+                d = json.loads(texto)
+            except (ValueError, RecursionError):
+                # RecursionError: un JSON anidado miles de veces; no debe tumbar el ingestor.
+                db.registrar_evento(con, "DATO_RECHAZADO", "no es JSON: " + texto[:80])
+                print("Rechazado (no es JSON):", texto[:60])
+                return
+            problema = validar(d)
+            if problema:
+                db.registrar_evento(con, "DATO_RECHAZADO", problema)
+                print("Rechazado:", problema)
+                return
+            nuevo_id = db.insertar(con, d)
+            guardados += 1
+            print("Guardado el registro", nuevo_id)
+        else:
+            print("Mensaje en otro tema, se ignora:", mensaje.topic)
+    except sqlite3.Error as e:
+        # Una falla de la base no debe detener la escucha: un error dentro del callback
+        # haria terminar loop_forever.
+        print("Error de la base de datos; el ingestor sigue:", e)
 
 
 cliente = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="ingestor-" + args.grupo)
