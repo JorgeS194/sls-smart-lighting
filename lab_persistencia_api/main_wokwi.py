@@ -81,7 +81,12 @@ else:
             ultimo = ticks_ms()
             cuerpo = armar_cuerpo()
             print("Enviando", cuerpo)
-            # TODO 16: enciende led_envio solo si el envio fue correcto; si falla, apagalo y cuenta los fallos
-            #          seguidos. Tras 3 fallos seguidos imprime un aviso.
-            led_envio.value(1 if enviar(cuerpo) else 0)
+            if enviar(cuerpo):
+                fallos = 0
+                led_envio.value(1)
+            else:
+                fallos += 1
+                led_envio.value(0)
+                if fallos >= 3:
+                    print("AVISO:", fallos, "envios fallidos seguidos")
         sleep(0.1)
