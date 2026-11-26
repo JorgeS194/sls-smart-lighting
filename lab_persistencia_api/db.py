@@ -68,7 +68,12 @@ def insertar(con, d):
     #         los nombres de tabla y columna salen de proyecto.py (ya validados), nunca de un usuario.
     #         Usa d.get(n) para que un campo opcional ausente se guarde vacio. Confirma con commit y
     #         devuelve el id nuevo (cursor.lastrowid).
-    return None
+    nombres = ", ".join(COLUMNAS)
+    marcas = ", ".join(["?"] * (len(COLUMNAS) + 1))   # una por columna, mas la fecha
+    valores = [ahora()] + [d.get(n) for n in COLUMNAS]
+    cursor = con.execute("INSERT INTO %s (fecha, %s) VALUES (%s)" % (TABLA, nombres, marcas), valores)
+    con.commit()
+    return cursor.lastrowid
 
 
 def registrar_evento(con, tipo, detalle=""):
@@ -78,7 +83,7 @@ def registrar_evento(con, tipo, detalle=""):
 
 def ultimos(con, n=10):
     # TODO 3: los ultimos n registros de TABLA, del mas reciente al mas antiguo (ORDER BY id DESC, LIMIT ?).
-    return []
+    return con.execute("SELECT * FROM %s ORDER BY id DESC LIMIT ?" % TABLA, (n,)).fetchall()
 
 
 def promedio_por_hora(con):
