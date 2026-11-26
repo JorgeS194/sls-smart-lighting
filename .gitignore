@@ -19,6 +19,12 @@ historial.csv
 backend/datos/*
 !backend/datos/.gitkeep
 
+# ===== Laboratorio 13-14 (lab_persistencia_api): solo esta carpeta =====
+lab_persistencia_api/*.db
+lab_persistencia_api/datos.csv
+lab_persistencia_api/.venv/
+lab_persistencia_api/*.pdf
+
 # ===== Editor y sistema operativo =====
 .vscode/
 .idea/
