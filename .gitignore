@@ -18,6 +18,7 @@ historial.csv
 *.log
 backend/datos/*
 !backend/datos/.gitkeep
+*.db
 
 # ===== Editor y sistema operativo =====
 .vscode/
