@@ -21,7 +21,22 @@ def definicion_columna(c):
     # TODO 1: arma el texto de la columna: nombre, tipo SQL (TIPOS_SQL), NOT NULL si es obligatorio y
     #         las restricciones CHECK segun minimo, maximo (BETWEEN, >= o <=) y permitidos (IN (...)).
     #         Usa literal(v) para escribir los valores permitidos.
-    return n + " " + TIPOS_SQL[c["tipo"]]
+    texto = n + " " + TIPOS_SQL[c["tipo"]]
+    if c.get("obligatorio"):
+        texto += " NOT NULL"
+    restricciones = []
+    # Se pregunta con "in c" y no con c.get(): un minimo de 0 es falso en Python y se perderia.
+    if "minimo" in c and "maximo" in c:
+        restricciones.append("%s BETWEEN %s AND %s" % (n, literal(c["minimo"]), literal(c["maximo"])))
+    elif "minimo" in c:
+        restricciones.append("%s >= %s" % (n, literal(c["minimo"])))
+    elif "maximo" in c:
+        restricciones.append("%s <= %s" % (n, literal(c["maximo"])))
+    if "permitidos" in c:
+        restricciones.append("%s IN (%s)" % (n, ", ".join(literal(v) for v in c["permitidos"])))
+    if restricciones:
+        texto += " CHECK (" + " AND ".join(restricciones) + ")"
+    return texto
 
 
 def esquema():
