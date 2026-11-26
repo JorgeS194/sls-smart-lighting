@@ -7,7 +7,7 @@ def conectar_wifi(ssid="Wokwi-GUEST", clave=""):
         return True
     wlan.active(True)
     wlan.connect(ssid, clave)
-    for _ in range(20):
+    for _ in range(60):
         if wlan.isconnected():
             print("Wi-Fi OK. IP:", wlan.ifconfig()[0])
             return True
