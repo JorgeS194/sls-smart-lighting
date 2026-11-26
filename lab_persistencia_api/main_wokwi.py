@@ -59,11 +59,17 @@ def armar_cuerpo():
 
 
 def enviar(cuerpo):
-    # TODO 15: envia el cuerpo con requests.post(URL, json=cuerpo, headers={"X-API-Key": API_KEY}).
-    #          Imprime el codigo de estado y devuelve True solo si es 200 o 201.
-    #          Captura OSError (sin red, DNS, tiempo agotado): imprime el error y devuelve False.
-    #          Cierra SIEMPRE la respuesta con close() (usa finally).
-    return False
+    respuesta = None
+    try:
+        respuesta = requests.post(URL, json=cuerpo, headers={"X-API-Key": API_KEY})
+        print("Codigo HTTP:", respuesta.status_code)
+        return respuesta.status_code in (200, 201)
+    except OSError as error:
+        print("Error de red:", error)
+        return False
+    finally:
+        if respuesta is not None:
+            respuesta.close()
 
 
 if not conectar_wifi():
