@@ -5,6 +5,8 @@
 **Integrantes:** Jorge Sarmiento, Francesco Iemma, Abrahan Tuñón, Rubén Domínguez
 **Proyecto:** SLS – Smart Lighting System (iluminación automática de tres zonas de una casa con un ESP32)
 **Fechas de las pruebas:** 25 y 26 de noviembre de 2026
+**Repositorio en GitHub:** https://github.com/JorgeS194/sls-smart-lighting (carpeta lab_persistencia_api/)
+**Proyecto de Wokwi del laboratorio:** https://wokwi.com/projects/481769278345949185
 
 En este laboratorio le agregamos a nuestro proyecto una capa de persistencia y servicios de datos: un ingestor MQTT que guarda en SQLite cada lectura válida, una API REST con Flask que es la única puerta de entrada a esa base, un panel web y el envío HTTP desde el ESP32 en Wokwi. Todo el código está en la carpeta `lab_persistencia_api/` del repositorio, y lo único que describe nuestro proyecto en particular es `proyecto.py`.
 
