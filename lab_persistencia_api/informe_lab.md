@@ -102,7 +102,15 @@ En `definicion_columna` usamos `"minimo" in c` en lugar de `c.get("minimo")` por
 
 ### 3.1 Parte D — Pruebas de persistencia
 
-Corrimos el ingestor y publicamos cada mensaje con `publicar_prueba.py`, un publicador que escribimos para reemplazar a `mosquitto_pub`. Cada mensaje de datos es el `EJEMPLO` completo y solo cambia el campo probado. Los datos van a `utp/ds8/<GRUPO>/sls-smart-lighting/telemetria` y los estados a `.../estado`. La prueba se hizo el 26-11-2026 contra un **Mosquitto local** y no contra el broker del curso (ver la sección 8).
+Corrimos el ingestor y publicamos cada mensaje con `publicar_prueba.py`, un publicador que escribimos para reemplazar a `mosquitto_pub`. Cada mensaje de datos es el `EJEMPLO` completo y solo cambia el campo probado. Los datos van a `utp/ds8/g5/sls-smart-lighting/telemetria` y los estados a `.../estado`. La prueba se hizo el 26-11-2026, a partir de las 19:08 (hora de Panamá), contra el **broker público del proyecto, `broker.emqx.io:1883`** (en internet, sin autenticación), con una base nueva (`--db parte_d_emqx.db`), y no contra el broker del curso (ver la sección 8).
+
+Primero hicimos la Parte C: el ingestor imprimió `Conectado al broker; escuchando utp/ds8/g5/sls-smart-lighting`, publicamos el `EJEMPLO` y respondió `Guardado el registro 1`. `consultas.py ultimos -n 5 --db parte_d_emqx.db` mostró:
+
+```
+fecha=2026-11-27T00:08:39Z dispositivo=demo-sala-francesco pir=0 ldr_adc=2593 distancia_cm=60.0 luz_sala=0 luz_habitacion_1=1 luz_habitacion_2=1
+```
+
+Después, en la misma base, provocamos los 9 escenarios de la guía en su orden:
 
 | # | Escenario | Cómo lo provocamos (mensaje exacto publicado) | Resultado esperado | Observado |
 |---|---|---|---|---|
@@ -118,18 +126,20 @@ Corrimos el ingestor y publicamos cada mensaje con `publicar_prueba.py`, un publ
 
 **Sobre el escenario 8:** `NaN` en `ldr_adc` se rechaza por **tipo**: `json.loads` lo convierte en un `float` y el campo es entero. Para comprobar también la regla de los números finitos publicamos, como prueba extra, `NaN` en `distancia_cm` (campo real). El ingestor respondió `Rechazado: el campo distancia_cm no es un numero finito`.
 
-Al terminar, en la base quedaron 3 registros, 2 eventos `ESTADO` y 6 `DATO_RECHAZADO`. El ingestor no se detuvo en ningún escenario.
+Al terminar, en la base quedaron 3 registros, 2 eventos `ESTADO` y 6 `DATO_RECHAZADO`. El ingestor no se detuvo en ningún escenario, y aunque el broker es público no llegó ningún mensaje ajeno a la prueba.
 
 **Consultas después de la Parte D:**
 
 ```
-consultas.py resumen   ->  total=3 minimo=2593 maximo=2593 promedio=2593.0
-consultas.py horas     ->  2026-11-26T17 promedio=2593.0 (3 registros)
-consultas.py csv --salida datos.csv  ->  Filas exportadas: 3
+consultas.py resumen --db parte_d_emqx.db  ->  total=3 minimo=2593 maximo=2593 promedio=2593.0
+consultas.py horas --db parte_d_emqx.db    ->  2026-11-27T00 promedio=2593.0 (3 registros)
+consultas.py csv --db parte_d_emqx.db --salida datos_parte_d_emqx.csv  ->  Filas exportadas: 3
 ```
 
+(Exportamos a otro archivo para no sobrescribir el `datos.csv` definitivo de la Parte I.)
+
 - **`resumen`**: el total de filas y el mínimo, máximo y promedio de `ldr_adc`. Los tres registros válidos tenían 2593, así que los tres valores coinciden.
-- **`horas`**: `hora` son los 13 primeros caracteres de la fecha UTC (`2026-11-26T17` es de 17:00 a 17:59 UTC), `promedio` es el promedio de `ldr_adc` en esa hora con un decimal y `n` es cuántos registros entraron en ella.
+- **`horas`**: `hora` son los 13 primeros caracteres de la fecha UTC (`2026-11-27T00` es de 00:00 a 00:59 UTC del 27, es decir, las 19:00 del 26 en Panamá), `promedio` es el promedio de `ldr_adc` en esa hora con un decimal y `n` es cuántos registros entraron en ella.
 - **`csv`**: exporta el encabezado `fecha,dispositivo,pir,ldr_adc,distancia_cm,luz_sala,luz_habitacion_1,luz_habitacion_2` y una fila por registro, en orden de `id`; aquí fueron 3 filas, y la de la inyección conserva el texto `x'); DROP TABLE registros; --` en la columna `dispositivo`. El `datos.csv` definitivo de la entrega es el de la Parte I: lo abrimos en una hoja de cálculo (Excel) y se ven las 8 columnas y sus 26 filas (sección 3.4).
 
 ### 3.2 Parte E — Contrato de la API
@@ -161,9 +171,9 @@ Hicimos esta prueba el 26-11-2026, entre las 18:40 y las 18:42 (hora de Panamá;
 | Base vacía | `proyecto.db` movida a un respaldo (equivale a borrarla); `GET /registros/ultimo` | 404 | `404 {"error":"no hay registros"}`. Además, `/resumen` devolvió `{"maximo":null,"minimo":null,"promedio":null,"total":0}` y `/horas` devolvió `[]`. El panel muestra «--» y 0 registros (figura 6) |
 | Inyección SQL | `POST /registros` con el `EJEMPLO` y `"dispositivo": "x'); DROP TABLE registros; --"` | 201; se guarda como texto; la tabla sigue | `201 {"id":5}`; las tablas `eventos` y `registros` siguen existiendo y `/registros/ultimo` devuelve el texto tal cual en `dispositivo` |
 | API apagada | Detuvimos `api.py` y ejecutamos `cliente.py` | Error de red; el panel muestra «Sin conexión con la API» | `1 error de red: ... [WinError 10061] No se puede establecer una conexión ya que el equipo de destino denegó expresamente dicha conexión`. El panel, que ya estaba abierto, cambió a «Sin conexion con la API» y conservó los 6 registros que mostraba. Al volver a levantar la API se recuperó solo, sin recargar |
-| Integración completa | Ingestor y API en la misma carpeta y sobre la misma `proyecto.db`; publicamos por MQTT con `publicar_prueba.py ... datos --cambiar dispositivo=mqtt-integracion --cambiar ldr_adc=1234 --cambiar pir=1` | El dato publicado por MQTT aparece en el panel | El publicador envió `{"dispositivo": "mqtt-integracion", "pir": 1, "ldr_adc": 1234, "distancia_cm": 60.0, "luz_sala": 0, "luz_habitacion_1": 1, "luz_habitacion_2": 1}`. El ingestor imprimió `Guardado el registro 6`, `GET /registros/ultimo` lo devolvió y el panel lo mostró como primera fila, con `1234` en «ldr_adc (ultimo)» (figura 7) |
+| Integración completa | Ingestor (`--grupo g5 --broker broker.emqx.io`) y API en la misma carpeta y sobre la misma `proyecto.db`; publicamos por MQTT, a través de `broker.emqx.io`, con `publicar_prueba.py --grupo g5 --broker broker.emqx.io datos --cambiar dispositivo=emqx-integracion --cambiar ldr_adc=1500 --cambiar pir=1` | El dato publicado por MQTT aparece en el panel | El publicador envió `{"dispositivo": "emqx-integracion", "pir": 1, "ldr_adc": 1500, "distancia_cm": 60.0, "luz_sala": 0, "luz_habitacion_1": 1, "luz_habitacion_2": 1}` a `utp/ds8/g5/sls-smart-lighting/telemetria`. El ingestor imprimió `Guardado el registro 27`, `GET /registros/ultimo` lo devolvió y el panel lo mostró como primera fila, con `1500` en «ldr_adc (ultimo)» y 27 registros guardados (figura 7) |
 
-En la integración, el ingestor también guardó los eventos `ESTADO online` y `ESTADO offline` que publicamos antes y después. Usamos el Mosquitto local con un grupo de prueba y sin autenticación (ver la sección 8).
+La integración la hicimos el 26-11-2026 a las 19:09 (hora de Panamá), sobre la `proyecto.db` de los escenarios anteriores, que ya tenía 26 registros. El ingestor también guardó los eventos `ESTADO online` y `ESTADO offline` que publicamos antes y después. Usamos el broker público del proyecto, `broker.emqx.io`, con el grupo `g5` y sin autenticación (ver la sección 8). Antes la habíamos hecho con un Mosquitto local y también funcionó (registro 6, `mqtt-integracion`, `ldr_adc` 1234).
 
 ### 3.4 `datos.csv` definitivo
 
@@ -188,7 +198,7 @@ fecha,dispositivo,pir,ldr_adc,distancia_cm,luz_sala,luz_habitacion_1,luz_habitac
 2026-11-26T23:41:55Z,demo-sala-francesco,0,2595,60.0,0,1,1
 ```
 
-El mínimo (1234) es el dato que llegó por MQTT en la prueba de integración; el resto ronda 2593 porque `cliente.py` parte del `EJEMPLO` y suma un paso aleatorio de ±3.
+El mínimo (1234) es el dato que llegó por MQTT en la primera prueba de integración, con el Mosquitto local; el resto ronda 2593 porque `cliente.py` parte del `EJEMPLO` y suma un paso aleatorio de ±3. Exportamos el CSV antes de repetir la integración con `broker.emqx.io`, así que el registro 27 (`emqx-integracion`) está en `proyecto.db` pero no en `datos.csv`.
 
 ---
 
@@ -246,7 +256,7 @@ Hicimos esta parte el 25-11-2026 con la API en `127.0.0.1:5000` y la base vacía
 *Figura 6. Panel en `http://127.0.0.1:5000/` con la base vacía (Parte I, escenario «Base vacía»).*
 
 ![Integración MQTT, ingestor, API y panel](capturas/i10_integracion.png)
-*Figura 7. Panel en `http://127.0.0.1:5000/` con el registro 6 (`mqtt-integracion`, `ldr_adc` 1234), que llegó por MQTT a través del ingestor (Parte I, escenario «Integración completa»).*
+*Figura 7. Panel en `http://127.0.0.1:5000/` con el registro 27 (`emqx-integracion`, `ldr_adc` 1500), que llegó por MQTT a través de `broker.emqx.io` y del ingestor (Parte I, escenario «Integración completa»).*
 
 ---
 
@@ -387,7 +397,7 @@ En nuestro `api.py` ya aplicamos dos medidas: la clave se compara en tiempo cons
 
 ## 8. Limitaciones y dificultades
 
-- **Broker del curso:** solo es accesible desde la red interna de la UTP, y la red Wi-Fi de estudiantes bloquea MQTT hacia internet (comprobamos que los puertos 1883, 8883 y 8083 estaban cerrados también hacia `broker.emqx.io`; solo pasa el 443). Por eso las Partes C, D e I (integración) se probaron con un **Mosquitto local** en `127.0.0.1:1883`, con un grupo de prueba (`<GRUPO>` en la Parte D y `g-local` en la Parte I) y **sin autenticación**. El código no cambia, porque el broker, el usuario y la clave son argumentos (`--broker`, `--usuario`, `--clave`). Lo que queda sin probar es la autenticación con el usuario y la clave del grupo.
+- **Broker del curso:** solo es accesible dentro de la red de la UTP. Por eso, en las Partes C, D e I (integración) usamos el **broker público del proyecto, `broker.emqx.io:1883`**, con el grupo `g5` y **sin autenticación**. El código no cambia, porque el broker, el usuario y la clave son argumentos (`--broker`, `--usuario`, `--clave`). Lo que queda sin probar es la autenticación con el usuario y la clave del grupo.
 - **Wi-Fi lento en Wokwi:** con la espera original de 10 s, la red `Wokwi-GUEST` a veces no llegaba a conectar. Ampliamos la espera de `red.py` a 30 s (`range(60)`, 60 vueltas de 0,5 s). Aun así, en un intento tardó más: el dispositivo imprimió `Sin Wi-Fi: reinicia la simulacion` y se detuvo, como está programado en el código base. Al reiniciar la simulación conectó normalmente.
 - **Las luces de la casa no se encienden en la Parte H:** `main_wokwi.py` solo calcula el estado de `luz_sala`, `luz_habitacion_1` y `luz_habitacion_2` y lo envía; no maneja el registro 74HC595 como el firmware completo. Por eso en Wokwi solo cambia el LED de envío (GPIO5), aunque el JSON diga que una luz está encendida.
 - **httpbin.org** no es nuestra API: es un servicio público que devuelve el eco. Wokwi no puede llegar a `localhost`, así que nuestra API se probó con `cliente.py`, `verificar_api.py` y el navegador.
